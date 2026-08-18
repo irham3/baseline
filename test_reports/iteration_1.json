@@ -1,0 +1,37 @@
+{
+  "summary": "Full E2E testing of Baseline. Backend: 17/17 pytest cases pass (health, demo seed exact numbers, demo agreement public, live AI /analyze with verbatim quote validation, prompt-injection resistance, deterministic estimate with/without cost profile, scope overrides changing results, guest ownership 403, agreement create + public projection + respond + immutable snapshot, JWT register/login/wrong-password/me, calibration auth-required + factor + apply_calibration trace). Frontend: Landing loads with hero h1 'Baseline before yes.' + both CTAs; Judge Mode runs 5 steps with timer, price floor visible on step 3, option-B selectable, judge-create-agreement produces /s/:token and judge-open-agreement anchor; Public /s/:token opens WITHOUT login in fresh browser context, shows price, approve/change/ask work, status persists after refresh, no cost/margin/break-even/brief leak; Analyze page use-sample fills brief, cp-preview updates, redact works, analyze-submit hits live Gemini and navigates to /analysis/:id; Analysis page renders brief-map, clarification gate with ov-* inputs drives recalc, formula-toggle opens formula-drawer, option-A/B/C render after recalc, whatsapp-copy works, select option -> create-agreement -> open-agreement anchor generated; Login register+workspace: cost-profile save + calibration factor ×1.5 shown in ws-cal-trace. Mobile 375px: no horizontal overflow on /, /judge, /analyze.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Landing hero-baseline card", "issues": ["The data-testid 'hero-baseline' is applied to the demo preview card, not the main H1 headline 'Baseline before yes.'. Not a bug, but reviewer may expect the H1 to carry that testid. Consider adding a data-testid='hero-headline' on the H1 to make automated headline checks unambiguous."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_pricing.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional: add data-testid='hero-headline' on the main H1 in Landing.js so headline tests are stable independent of the demo card.",
+    "React Router v6 future-flag warnings (v7_startTransition, v7_relativeSplatPath) in console — harmless but easy to silence."
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~750 lines; still manageable but approaching the 700-line threshold — consider splitting auth/agreement/estimate routers into modules if new features are added.",
+    "Public /agreement/{token} projection is whitelist-based (only token/status/snapshot/responses/timestamps returned) — good; verified no owner_id/brief/margin/break-even leaks in both created and demo agreements.",
+    "resolve_owner falls back to auto-generated guest id if X-Guest-Id header missing, meaning /api/analyze without header succeeds — this is intentional per spec, but note the resulting analysis is orphaned (no way for the client to fetch it back). Frontend api.js sets the header from localStorage, so this only affects raw API callers.",
+    "clean() strips _id and password_hash but not always applied uniformly (e.g., google_session, refresh); currently no ObjectId leak observed because inserts use string ids and reads project _id:0. Safe today; regressions possible if a new endpoint returns doc without projection.",
+    "Prompt-injection test verified: /api/analyze does NOT return price or system prompt content in fields, even when brief instructs the model to reveal it. Deterministic engine correctly gates pricing behind cost_profile completeness."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (new — full E2E backend test suite, pytest-compatible)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "JWT: raka@baseline.app / baseline123 (pre-registered); UI test auto-registers fresh users e.g. raka_ui_XXXX@baseline.app / baseline123. Google Auth requires seeded session per /app/auth_testing.md and cannot be automated end-to-end.",
+  "seed_data_creation": "None persistent. Backend tests create disposable users (email prefix raka_<uuid>@baseline.app) and analyses/agreements; UI tests likewise. No cleanup implemented — DB grows on repeat runs but keys/emails are unique so no collisions.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All P0 flows verified. Deterministic seed numbers are locked (37-42h, break-even 4.1-4.6M, price floor 5.125-5.75M, options 3M/5.5M/6.5M, completeness 87, risk high). Live Gemini 3 Flash extraction is live via EMERGENT_LLM_KEY — expect ~4-6s latency per /api/analyze call. Public /s/:token requires the frontend to be given the token from either judge-create-agreement, demo/agreement, or analysis create-agreement. On the Analysis page, options A/B/C only render after the user calls recalc-btn with sufficient scope + budget filled; create-agreement appears only after selecting an option. Mobile 375 verified overflow-free on landing/judge/analyze.",
+  "rca of the issue": "N/A — no failing behaviors. My first UI script had two false-positive failures that were test-side, not app-side: (1) I asserted 'Baseline before yes' inside data-testid='hero-baseline' but that testid is on the preview card, not the H1; (2) my prompt-injection assertion stringified the entire response including the echoed brief, matching 'system prompt' from the brief itself — fixed by excluding the brief field from the dump."
+}

@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f6f4ee;
+  --surface: #ffffff;
+  --raised: #fbfaf6;
+  --ink: #1a1d1a;
+  --ink-soft: #4c524b;
+  --ink-faint: #868b83;
+  --line: #e6e2d8;
+  --green: #1f6b4a;
+  --green-strong: #17553b;
+  --green-soft: #e7f0ea;
+  --amber: #b06d15;
+  --amber-soft: #f7ecd8;
+  --danger: #a63a3a;
+  --danger-soft: #f4e2df;
+
+  --bg-rgb: 246 244 238;
+  --surface-rgb: 255 255 255;
+  --raised-rgb: 251 250 246;
+  --ink-rgb: 26 29 26;
+  --ink-soft-rgb: 76 82 75;
+  --ink-faint-rgb: 134 139 131;
+  --line-rgb: 230 226 216;
+  --green-rgb: 31 107 74;
+  --green-strong-rgb: 23 85 59;
+  --green-soft-rgb: 231 240 234;
+  --amber-rgb: 176 109 21;
+  --amber-soft-rgb: 247 236 216;
+  --danger-rgb: 166 58 58;
+  --danger-soft-rgb: 244 226 223;
+}
+
+* {
+  border-color: var(--line);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: var(--green);
+  color: #fff;
+}
+
+/* Grain / paper texture — subtle, non-decorative depth */
+.bg-grain {
+  background-image: radial-gradient(rgba(26, 29, 26, 0.035) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+@layer components {
+  .wrap {
+    @apply mx-auto w-full max-w-6xl px-5 sm:px-6 lg:px-8;
+  }
+  .wrap-narrow {
+    @apply mx-auto w-full max-w-3xl px-5 sm:px-6;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full text-[15px] font-semibold
+           transition-[background-color,color,box-shadow,transform] duration-200
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2
+           focus-visible:ring-green focus-visible:ring-offset-page disabled:opacity-50
+           disabled:pointer-events-none select-none;
+  }
+  .btn-lg { @apply px-6 py-3.5; }
+  .btn-md { @apply px-5 py-2.5; }
+  .btn-sm { @apply px-3.5 py-2 text-sm; }
+
+  .btn-primary {
+    @apply btn bg-green text-white shadow-[0_1px_0_rgba(255,255,255,0.15)_inset,0_10px_24px_-12px_rgba(31,107,74,0.6)]
+           hover:bg-green-strong active:translate-y-px;
+  }
+  .btn-secondary {
+    @apply btn bg-surface text-ink border border-line hover:bg-raised active:translate-y-px;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-ink-soft hover:text-ink hover:bg-black/[0.04];
+  }
+  .btn-danger {
+    @apply btn bg-danger text-white hover:brightness-95 active:translate-y-px;
+  }
+
+  .card {
+    @apply rounded-2xl border border-line bg-surface shadow-card;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold;
+  }
+
+  .field-label {
+    @apply block text-[13px] font-semibold text-ink-soft mb-1.5;
+  }
+  .input {
+    @apply w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-[15px] text-ink
+           placeholder:text-ink-faint outline-none transition-colors
+           focus:border-green focus:ring-2 focus:ring-green/20;
+  }
+  .textarea { @apply input leading-relaxed resize-none; }
+
+  .eyebrow {
+    @apply text-xs font-bold uppercase tracking-[0.14em] text-green;
+  }
+}
+
+.mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+
+/* Focus visibility for keyboard users everywhere */
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

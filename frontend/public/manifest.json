@@ -1,0 +1,8 @@
+{
+  "short_name": "Baseline",
+  "name": "Baseline — pre-deal baseline check",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#1F6B4A",
+  "background_color": "#F7F5F0"
+}
