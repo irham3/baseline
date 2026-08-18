@@ -1,16 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { 
-  ArrowRight, 
-  AlertTriangle, 
-  ShieldCheck, 
-  Lock, 
-  Calculator, 
-  FileText, 
-  Sparkles, 
-  Sliders, 
-  Layers, 
-  MessageSquare, 
+import {
+  ArrowRight,
+  AlertTriangle,
+  ShieldCheck,
+  Lock,
+  Calculator,
+  FileText,
+  Sparkles,
+  Sliders,
+  Layers,
+  MessageSquare,
   ChevronRight,
   Clock,
   Video
@@ -23,8 +23,8 @@ import { idr, idrCompact } from "@/lib/format";
 function RetroGrid() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden [perspective:200px] opacity-25">
-      <div 
-        className="absolute inset-0 [transform:rotateX(60deg)] [background-image:linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_0),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_0)] [background-repeat:repeat] [background-size:48px_48px] [height:300vh] [inset:0%_0px] [margin-left:-50%] [transform-origin:100%_0_0] [width:200%]"
+      <div
+        className="absolute inset-0 [transform:rotateX(60deg)] [background-image:linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_0),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_0)] [background-repeat:repeat] [background-size:48px_48px] [height:300vh] [margin-left:-50%] [transform-origin:100%_0_0] [width:200%]"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-[#090b0e] via-transparent to-[#090b0e]" />
     </div>
@@ -44,7 +44,7 @@ function InteractiveCalculator({ seed }) {
     const totalHours = Math.round(reels * baseHoursPerReel + revisionHours);
     const hourlyCost = 140000; // IDR 140k/hr
     const rushMultiplier = isRush ? 1.35 : 1.0;
-    
+
     const breakEven = Math.round(totalHours * hourlyCost * rushMultiplier);
     const priceFloor = Math.round(breakEven * 1.35); // 35% margin floor
     const clientBudget = 3000000; // IDR 3M
@@ -86,12 +86,12 @@ function InteractiveCalculator({ seed }) {
               <span className="flex items-center gap-1.5"><Video size={14} className="text-emerald-400" /> Deliverable Volume</span>
               <span className="text-emerald-400 font-mono font-bold">{reels} Short-form Reels</span>
             </div>
-            <input 
-              type="range" 
-              min="2" 
-              max="24" 
-              step="2" 
-              value={reels} 
+            <input
+              type="range"
+              min="2"
+              max="24"
+              step="2"
+              value={reels}
               onChange={(e) => setReels(Number(e.target.value))}
               className="w-full accent-emerald-500 cursor-pointer h-2 bg-white/10 rounded-lg appearance-none"
             />
@@ -106,11 +106,10 @@ function InteractiveCalculator({ seed }) {
             <button
               type="button"
               onClick={() => setFootageOrganized(!footageOrganized)}
-              className={`flex flex-col items-start p-3.5 rounded-2xl border text-left transition-all ${
-                footageOrganized 
-                  ? "border-emerald-500/40 bg-emerald-500/10 text-white" 
+              className={`flex flex-col items-start p-3.5 rounded-2xl border text-left transition-all ${footageOrganized
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-white"
                   : "border-white/10 bg-white/[0.02] text-zinc-400 hover:border-white/20"
-              }`}
+                }`}
             >
               <span className="text-[11px] font-semibold">Raw Footage</span>
               <span className={`text-xs font-bold mt-1 ${footageOrganized ? "text-emerald-400" : "text-amber-400"}`}>
@@ -121,11 +120,10 @@ function InteractiveCalculator({ seed }) {
             <button
               type="button"
               onClick={() => setRevisions(revisions === "capped" ? "open" : "capped")}
-              className={`flex flex-col items-start p-3.5 rounded-2xl border text-left transition-all ${
-                revisions === "capped" 
-                  ? "border-emerald-500/40 bg-emerald-500/10 text-white" 
+              className={`flex flex-col items-start p-3.5 rounded-2xl border text-left transition-all ${revisions === "capped"
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-white"
                   : "border-rose-500/40 bg-rose-500/10 text-white"
-              }`}
+                }`}
             >
               <span className="text-[11px] font-semibold">Revision Bounds</span>
               <span className={`text-xs font-bold mt-1 ${revisions === "capped" ? "text-emerald-400" : "text-rose-400"}`}>
@@ -136,11 +134,10 @@ function InteractiveCalculator({ seed }) {
             <button
               type="button"
               onClick={() => setIsRush(!isRush)}
-              className={`flex flex-col items-start p-3.5 rounded-2xl border text-left transition-all ${
-                isRush 
-                  ? "border-amber-500/40 bg-amber-500/10 text-white" 
+              className={`flex flex-col items-start p-3.5 rounded-2xl border text-left transition-all ${isRush
+                  ? "border-amber-500/40 bg-amber-500/10 text-white"
                   : "border-white/10 bg-white/[0.02] text-zinc-400 hover:border-white/20"
-              }`}
+                }`}
             >
               <span className="text-[11px] font-semibold">Timeline</span>
               <span className={`text-xs font-bold mt-1 ${isRush ? "text-amber-400" : "text-zinc-300"}`}>
@@ -199,7 +196,7 @@ export default function Landing() {
   const [seed, setSeed] = useState(null);
 
   useEffect(() => {
-    client.get("/demo/seed").then((r) => setSeed(r.data)).catch(() => {});
+    client.get("/demo/seed").then((r) => setSeed(r.data)).catch(() => { });
   }, []);
 
   return (
