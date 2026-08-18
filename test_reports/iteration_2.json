@@ -1,0 +1,25 @@
+{
+  "summary": "Backend regression check after refactor of _run_estimate into helpers _calibrate_estimate/_build_pricing (server.py) and _fit_quantity_to_budget (scope.py). Executed full E2E pytest suite (17 tests) + pricing unit tests (17 tests). All 34 tests PASS. Verified specifically: (1) GET /api/demo/seed exact numbers — hours 37/42, break_even 4100000/4600000, price_floor 5125000/5750000, options prices [3000000,5500000,6500000], scope_completeness 87, risk level 'high'; (2) POST /api/analysis/{id}/estimate with complete cost profile + full scope overrides returns price_available=true and exactly 3 options; (3) incomplete cost profile returns price_available=false, price=null, but estimate.low > 0; (4) changing scope_overrides (footage_preselected/revision_rounds) yields different low/high — overrides drive engine; (5) calibration flow: saved actual (est 20, actual 30) → apply_calibration=true returns calibration_trace with factor=1.5, confidence='low'; (6) Agreement flow: create → public projection contains price but not break_even/margin/cost_per_hour/owner_id/brief; respond 'setuju' → APPROVED; snapshot immutable across re-fetch; (7) Prompt-injection resistance — /api/analyze does not emit price or 'system prompt' text and still extracts fields. Behavior is byte-identical to iteration_1.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_pricing.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Refactor is clean and behavior-preserving. _calibrate_estimate is a pure function returning (adjusted_est, trace) — good testability. _build_pricing correctly gates options/whatsapp/decline behind client_budget presence. _fit_quantity_to_budget encapsulates the Option-A shrink loop clearly.",
+    "Confirmed the code-review 'undefined variable' claims (pricing.py level/reason, ai_service.py parsed) are FALSE POSITIVES — all branches assign level/reason before use; parsed is inside a try where the except re-raises, so it is always defined at the return.",
+    "server.py is still ~761 lines — same recommendation as iteration_1: split routers as new features are added.",
+    "No new lint issues introduced by refactor."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "not tested (backend-only per request)"},
+  "test_credentials": "JWT: raka@baseline.app / baseline123 (pre-registered). Tests auto-register disposable users raka_<uuid>@baseline.app / baseline123.",
+  "seed_data_creation": "None persistent. Disposable users/analyses/agreements created per run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Refactor verified regression-free. Deterministic invariants locked: seed hours 37/42, break_even 4.1M/4.6M, price_floor 5.125M/5.75M, options [3M/5.5M/6.5M] with quantities [6,12,12], completeness 87, risk high, calibration factor exactly 1.5 for (20→30). If future changes touch _fit_quantity_to_budget, re-verify test_demo_seed_numbers first as it exercises Option A shrink logic (quantity 6). Live Gemini via EMERGENT_LLM_KEY takes ~4-6s per /api/analyze call.",
+  "rca of the issue": "N/A — no regressions detected."
+}

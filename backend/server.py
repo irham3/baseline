@@ -523,6 +523,41 @@ async def estimate(analysis_id: str, body: EstimateBody, request: Request):
     return await _run_estimate(doc, body, request, persist=True)
 
 
+def _calibrate_estimate(est: dict, cal: dict) -> tuple[dict, dict]:
+    """Apply a one-project calibration factor to an hour estimate. Pure; returns (adjusted_est, trace)."""
+    factor = cal["actual_hours"] / cal["estimated_hours"]
+    adj_low = round(est["low"] * factor, 1)
+    adj_high = round(est["high"] * factor, 1)
+    trace = {
+        "project_name": cal["project_name"],
+        "estimated_hours": cal["estimated_hours"],
+        "actual_hours": cal["actual_hours"],
+        "factor": round(factor, 3),
+        "extreme": factor > 2.5 or factor < 0.4,
+        "base_low": est["low"], "base_high": est["high"],
+        "adjusted_low": adj_low, "adjusted_high": adj_high,
+        "confidence": "low",
+        "note": "Sinyal kalibrasi satu proyek — bukan benchmark stabil.",
+    }
+    adjusted = {"low": adj_low, "high": adj_high, "breakdown": est["breakdown"], "calibrated": True}
+    return adjusted, trace
+
+
+def _build_pricing(scope: dict, cph: float, target_margin: float, est: dict) -> dict:
+    """Compute price + (optionally) options and copy for a resolved scope. Behavior-preserving helper."""
+    out = {"price": None, "options": None, "whatsapp": None, "decline": None}
+    buffers = scope_mod.derive_buffers(scope)
+    out["price"] = pricing.price_estimate(
+        est["low"], est["high"], cph, 0.0, buffers, target_margin, scope.get("client_budget"),
+    )
+    if scope.get("client_budget"):
+        options = scope_mod.build_options(scope, cph, target_margin, scope["client_budget"])
+        out["options"] = options
+        out["whatsapp"] = {tone: scope_mod.whatsapp_message(scope, options, tone) for tone in ("warm", "firm", "formal")}
+        out["decline"] = scope_mod.decline_message(scope)
+    return out
+
+
 async def _run_estimate(doc: dict, body: EstimateBody, request: Request, persist: bool):
     scope = build_scope(body.scope_overrides)
     est = pricing.estimate_hours(scope)
@@ -536,46 +571,16 @@ async def _run_estimate(doc: dict, body: EstimateBody, request: Request, persist
         if u:
             cal = await db.project_actuals.find_one({"owner_id": u["user_id"]}, {"_id": 0})
             if cal and cal.get("estimated_hours", 0) > 0:
-                factor = cal["actual_hours"] / cal["estimated_hours"]
-                extreme = factor > 2.5 or factor < 0.4
-                est_cal_low = round(est["low"] * factor, 1)
-                est_cal_high = round(est["high"] * factor, 1)
-                calibration_trace = {
-                    "project_name": cal["project_name"],
-                    "estimated_hours": cal["estimated_hours"],
-                    "actual_hours": cal["actual_hours"],
-                    "factor": round(factor, 3),
-                    "extreme": extreme,
-                    "base_low": est["low"], "base_high": est["high"],
-                    "adjusted_low": est_cal_low, "adjusted_high": est_cal_high,
-                    "confidence": "low",
-                    "note": "Sinyal kalibrasi satu proyek — bukan benchmark stabil.",
-                }
-                est = {"low": est_cal_low, "high": est_cal_high, "breakdown": est["breakdown"], "calibrated": True}
+                est, calibration_trace = _calibrate_estimate(est, cal)
 
     completeness = pricing.scope_completeness(
         len(scope_mod.REQUIRED_FIELDS) - scope["unresolved_major_count"] - 2,
         len(scope_mod.REQUIRED_FIELDS),
     )
 
-    price = None
-    options = None
-    whatsapp = None
-    decline = None
-    if complete and cph:
-        buffers = scope_mod.derive_buffers(scope)
-        price = pricing.price_estimate(
-            est["low"], est["high"], cph, 0.0, buffers, target_margin,
-            scope.get("client_budget"),
-        )
-        if scope.get("client_budget"):
-            options = scope_mod.build_options(scope, cph, target_margin, scope["client_budget"])
-            whatsapp = {
-                "warm": scope_mod.whatsapp_message(scope, options, "warm"),
-                "firm": scope_mod.whatsapp_message(scope, options, "firm"),
-                "formal": scope_mod.whatsapp_message(scope, options, "formal"),
-            }
-            decline = scope_mod.decline_message(scope)
+    parts = _build_pricing(scope, cph, target_margin, est) if (complete and cph) else \
+        {"price": None, "options": None, "whatsapp": None, "decline": None}
+    price, options, whatsapp, decline = parts["price"], parts["options"], parts["whatsapp"], parts["decline"]
 
     risk = pricing.risk_triggers(scope, est, price or {"break_even_low": float("inf")})
     conf = pricing.confidence_level(completeness["percent"],

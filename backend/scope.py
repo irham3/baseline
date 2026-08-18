@@ -82,32 +82,28 @@ def format_idr_juta(amount: float) -> str:
 # --------------------------------------------------------------------------
 # Deal-option builder (deterministic)
 # --------------------------------------------------------------------------
-def build_options(scope: dict, cost_per_hour: float, target_margin: float, client_budget: float) -> list[dict]:
-    options: list[dict] = []
-
-    # ---- Option A: keep budget, shrink scope ----
-    a_qty = int(scope.get("quantity") or 0)
-    a_scope_base = {
-        **scope,
-        "footage_preselected": True,
-        "revision_rounds": 1,
-        "motion_level": "none",
-    }
-    chosen_qty = 1
-    a_price_info = None
-    for qty in range(a_qty, 0, -1):
-        trial = {**a_scope_base, "quantity": qty}
+def _fit_quantity_to_budget(scope: dict, cost_per_hour: float, target_margin: float, client_budget: float) -> tuple[int, dict]:
+    """Option A helper: shrink quantity until the price floor fits the client budget."""
+    base = {**scope, "footage_preselected": True, "revision_rounds": 1, "motion_level": "none"}
+    chosen_qty, info = 1, None
+    for qty in range(int(scope.get("quantity") or 0), 0, -1):
+        trial = {**base, "quantity": qty}
         est = pricing.estimate_hours(trial)
         info = pricing.price_estimate(
             est["low"], est["high"], cost_per_hour, 0.0,
             derive_buffers(trial), target_margin, client_budget,
         )
-        if info["price_floor_high"] <= client_budget:
-            chosen_qty = qty
-            a_price_info = info
-            break
         chosen_qty = qty
-        a_price_info = info
+        if info["price_floor_high"] <= client_budget:
+            break
+    return chosen_qty, info
+
+
+def build_options(scope: dict, cost_per_hour: float, target_margin: float, client_budget: float) -> list[dict]:
+    options: list[dict] = []
+
+    # ---- Option A: keep budget, shrink scope ----
+    chosen_qty, a_price_info = _fit_quantity_to_budget(scope, cost_per_hour, target_margin, client_budget)
     options.append({
         "id": "A",
         "type": "budget_fixed",
