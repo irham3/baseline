@@ -1,4 +1,4 @@
-"""Agreement (Lembar Sepakat) routes: create, public read, respond, demo."""
+"""Agreement Sheet routes: create, public read, respond, demo."""
 from __future__ import annotations
 
 import secrets
@@ -16,10 +16,10 @@ router = APIRouter(prefix="/api")
 async def _owned_analysis(analysis_id: str, request: Request) -> dict:
     doc = await db.brief_analyses.find_one({"analysis_id": analysis_id})
     if not doc:
-        raise HTTPException(status_code=404, detail="Analisis tidak ditemukan")
+        raise HTTPException(status_code=404, detail="Analysis not found")
     _, owner_id = await resolve_owner(request)
     if doc["owner_id"] != owner_id:
-        raise HTTPException(status_code=403, detail="Tidak diizinkan")
+        raise HTTPException(status_code=403, detail="Not allowed")
     return doc
 
 
@@ -59,7 +59,7 @@ async def demo_agreement(body: DemoAgreementBody):
 async def get_agreement(token: str):
     doc = await db.scope_agreements.find_one({"token": token}, {"_id": 0})
     if not doc:
-        raise HTTPException(status_code=404, detail="Lembar Sepakat tidak ditemukan atau sudah dihapus.")
+        raise HTTPException(status_code=404, detail="Agreement Sheet not found or already deleted.")
     expires_at = datetime.fromisoformat(doc["expires_at"])
     expired = expires_at < now_utc()
     return {
@@ -75,13 +75,19 @@ async def get_agreement(token: str):
 async def respond_agreement(token: str, body: AgreementResponseBody):
     doc = await db.scope_agreements.find_one({"token": token})
     if not doc:
-        raise HTTPException(status_code=404, detail="Lembar Sepakat tidak ditemukan.")
+        raise HTTPException(status_code=404, detail="Agreement Sheet not found.")
     if datetime.fromisoformat(doc["expires_at"]) < now_utc():
-        raise HTTPException(status_code=410, detail="Penawaran ini sudah kedaluwarsa.")
-    status_map = {"setuju": "APPROVED", "minta_perubahan": "CHANGE_REQUESTED", "tanyakan_detail": "SENT"}
+        raise HTTPException(status_code=410, detail="This offer has expired.")
+    status_map = {"approve": "APPROVED", "request_changes": "CHANGE_REQUESTED", "ask_question": "SENT"}
+    legacy_status_map = {"setuju": "APPROVED", "minta_perubahan": "CHANGE_REQUESTED", "tanyakan_detail": "SENT"}
     if body.action not in status_map:
-        raise HTTPException(status_code=422, detail="Aksi tidak valid.")
+        if body.action in legacy_status_map:
+            status = legacy_status_map[body.action]
+        else:
+            raise HTTPException(status_code=422, detail="Invalid action.")
+    else:
+        status = status_map[body.action]
     response = {"action": body.action, "message": body.message, "created_at": iso(now_utc())}
     await db.scope_agreements.update_one(
-        {"token": token}, {"$push": {"responses": response}, "$set": {"status": status_map[body.action]}})
-    return {"ok": True, "status": status_map[body.action]}
+        {"token": token}, {"$push": {"responses": response}, "$set": {"status": status}})
+    return {"ok": True, "status": status}

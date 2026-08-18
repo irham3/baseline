@@ -21,22 +21,25 @@ function toNum(v) {
 function overridesFromFields(fields) {
   const get = (name) => fields.find((f) => f.name === name);
   const rev = get("revision_rounds");
+  const preselected = get("footage_preselected");
+  const scripting = get("scripting");
+  const rush = get("rush");
   let revision_rounds = null;
   if (rev && typeof rev.value === "number") revision_rounds = rev.value;
   return {
     quantity: toNum(get("quantity")?.value) ?? 1,
     client_budget: toNum(get("client_budget")?.value),
     final_duration: toNum(get("final_duration")?.value),
-    deadline_working_days: null,
+    deadline_working_days: toNum(get("deadline_working_days")?.value),
     approver_count: toNum(get("approver_count")?.value) ?? 1,
     revision_rounds,
-    footage_hours: null,
-    footage_preselected: false,
+    footage_hours: toNum(get("footage_hours")?.value),
+    footage_preselected: typeof preselected?.value === "boolean" ? preselected.value : false,
     footage_available: !!get("footage_available")?.value || get("footage_available")?.status === "stated",
     subtitles: true,
-    scripting: false,
-    motion_level: "basic",
-    rush: false,
+    scripting: typeof scripting?.value === "boolean" ? scripting.value : false,
+    motion_level: get("motion_level")?.value || "basic",
+    rush: typeof rush?.value === "boolean" ? rush.value : false,
   };
 }
 
@@ -73,12 +76,9 @@ export default function Analysis() {
       .get(`/analysis/${id}`)
       .then((r) => {
         setAnalysis(r.data);
-        setOverrides(overridesFromFields(r.data.fields || []));
-        if (r.data.scope_used) {
-          // already estimated previously
-        }
+        setOverrides(r.data.scope_used || overridesFromFields(r.data.fields || []));
       })
-      .catch((e) => setLoadErr(apiErrorMessage(e.response?.data?.detail) || "Gagal memuat analisis."));
+      .catch((e) => setLoadErr(apiErrorMessage(e.response?.data?.detail) || "Failed to load analysis."));
   }, [id]);
 
   useEffect(() => {
@@ -98,9 +98,13 @@ export default function Analysis() {
       });
       setResult(data);
       track("estimate_viewed", { analysis_id: id });
-      if (!selected && data.options?.length) setSelected(null);
+      if (!selected && data.options?.length) {
+        const defaultOption = data.options.find((opt) => opt.id === "B") || data.options[0];
+        setSelected(defaultOption.id);
+        setDeclineMode(false);
+      }
     } catch (e) {
-      setToast(apiErrorMessage(e.response?.data?.detail) || "Perhitungan gagal.");
+      setToast(apiErrorMessage(e.response?.data?.detail) || "Calculation failed.");
       setTimeout(() => setToast(""), 3000);
     } finally {
       setRecalc(false);
@@ -120,12 +124,12 @@ export default function Analysis() {
     try {
       const { data } = await client.post(`/analysis/${id}/agreement`, {
         option: opt,
-        project_title: projectTitle || "Penawaran video — Baseline",
+        project_title: projectTitle || "Video offer - Baseline Work",
       });
       setAgreement(data);
       track("agreement_created", { analysis_id: id, option: selected });
     } catch (e) {
-      setToast(apiErrorMessage(e.response?.data?.detail) || "Gagal membuat Lembar Sepakat.");
+      setToast(apiErrorMessage(e.response?.data?.detail) || "Failed to create Agreement Sheet.");
       setTimeout(() => setToast(""), 3000);
     } finally {
       setCreating(false);
@@ -141,7 +145,7 @@ export default function Analysis() {
         <div className="wrap-narrow py-16 text-center">
           <TriangleAlert className="mx-auto text-amber" size={30} />
           <p className="mt-3 font-semibold text-ink">{loadErr}</p>
-          <Link to="/analyze" className="btn-primary btn-md mt-4">Kembali ke Analyze</Link>
+          <Link to="/analyze" className="btn-primary btn-md mt-4">Back to Analyze</Link>
         </div>
       </Shell>
     );
@@ -159,19 +163,19 @@ export default function Analysis() {
     <Shell>
       <div className="wrap py-8">
         <button onClick={() => navigate("/analyze")} className="btn-ghost btn-sm mb-3" data-testid="analysis-back">
-          <ArrowLeft size={14} /> Analyze lain
+          <ArrowLeft size={14} /> New analysis
         </button>
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-extrabold tracking-tight text-ink">Brief Map</h1>
+          <h1 className="text-2xl font-extrabold text-ink">Brief Map</h1>
           {analysis.is_demo && <Badge tone="amber">Demo</Badge>}
         </div>
 
         {/* Redacted brief */}
         <div className="card mt-4 p-4">
-          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-faint">Brief (input kamu)</div>
-          <p className="text-[14px] leading-relaxed text-ink-soft">“{analysis.brief}”</p>
+          <div className="mb-1 text-xs font-semibold text-ink-faint">Brief input</div>
+          <p className="text-[14px] leading-relaxed text-ink-soft">"{analysis.brief}"</p>
           {analysis.redaction?.total > 0 && (
-            <p className="mt-1 text-[12px] text-green-strong">{analysis.redaction.total} data sensitif telah diredaksi.</p>
+            <p className="mt-1 text-[12px] text-green-strong">{analysis.redaction.total} sensitive items were redacted.</p>
           )}
         </div>
 
@@ -188,8 +192,8 @@ export default function Analysis() {
 
             {user && hasCalibration && (
               <label className="card flex items-center justify-between p-4" data-testid="apply-calibration">
-                <span className="text-sm font-medium text-ink">Terapkan kalibrasi 1 proyek</span>
-                <input type="checkbox" checked={applyCalibration} onChange={(e) => setApplyCalibration(e.target.checked)} className="h-5 w-5 accent-[var(--green)]" />
+                <span className="text-sm font-medium text-ink">Apply one-project calibration</span>
+                <input type="checkbox" name="apply-calibration" checked={applyCalibration} onChange={(e) => setApplyCalibration(e.target.checked)} className="h-5 w-5 accent-[var(--green)]" />
               </label>
             )}
 
@@ -205,7 +209,7 @@ export default function Analysis() {
           <div className="space-y-4">
             {!result ? (
               <div className="card flex min-h-[240px] flex-col items-center justify-center p-8 text-center" data-testid="estimate-empty">
-                <p className="text-ink-soft">Isi jawaban di kiri lalu tekan <span className="font-semibold text-ink">Hitung estimasi</span> untuk melihat rentang jam & price floor.</p>
+                <p className="text-ink-soft">Answer the scope fields, then press <span className="font-semibold text-ink">Calculate estimate</span> to see the hour range and price floor.</p>
               </div>
             ) : (
               <>
@@ -228,8 +232,8 @@ export default function Analysis() {
         {/* Options + WhatsApp */}
         {result?.options && (
           <div className="mt-8">
-            <h2 className="text-xl font-extrabold tracking-tight text-ink">Three deal options</h2>
-            <p className="mt-1 text-ink-soft">Semua angka dari engine. Kamu bisa edit setiap pesan sebelum kirim.</p>
+            <h2 className="text-xl font-extrabold text-ink">Three deal options</h2>
+            <p className="mt-1 text-ink-soft">All numbers come from the engine. You can edit every draft before sending.</p>
             <div className="mt-4">
               <DealOptions
                 options={result.options}
@@ -248,39 +252,40 @@ export default function Analysis() {
                 onCopy={() => track("whatsapp_copied", { analysis_id: id, decline: declineMode })}
               />
 
-              {/* Lembar Sepakat creation */}
+              {/* Agreement Sheet creation */}
               {!declineMode && (
                 <div className="card p-5" data-testid="create-agreement-panel">
-                  <h4 className="flex items-center gap-2 font-bold text-ink"><Link2 size={16} className="text-green" /> Lembar Sepakat</h4>
+                  <h4 className="flex items-center gap-2 font-bold text-ink"><Link2 size={16} className="text-green" /> Agreement Sheet</h4>
                   {!selectedOption ? (
-                    <p className="mt-2 text-[13px] text-ink-faint">Pilih salah satu opsi di atas untuk membuat snapshot yang bisa dibagikan ke klien.</p>
+                    <p className="mt-2 text-[13px] text-ink-faint">Select an option above to create a client-safe shareable snapshot.</p>
                   ) : agreement ? (
                     <div className="mt-3 space-y-3">
                       <div className="rounded-xl bg-green-soft/60 p-3">
-                        <p className="text-[13px] font-semibold text-green-strong">Link publik dibuat. Tanpa login klien.</p>
+                        <p className="text-[13px] font-semibold text-green-strong">Public link created. No client login required.</p>
                         <p className="mono mt-1 break-all text-[12px] text-ink-soft">{agreementUrl}</p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <button onClick={() => { copy(agreementUrl); setToast("Link tersalin"); setTimeout(() => setToast(""), 1800); }} className="btn-secondary btn-sm" data-testid="copy-agreement-link">
-                          {copyState === "ok" ? <><Check size={14} /> Tersalin</> : <><Copy size={14} /> Salin link</>}
+                        <button onClick={() => { copy(agreementUrl); setToast("Link copied"); setTimeout(() => setToast(""), 1800); }} className="btn-secondary btn-sm" data-testid="copy-agreement-link">
+                          {copyState === "ok" ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy link</>}
                         </button>
                         <a href={`/s/${agreement.token}`} target="_blank" rel="noreferrer" className="btn-primary btn-sm" data-testid="open-agreement">
-                          Buka <ExternalLink size={14} />
+                          Open <ExternalLink size={14} />
                         </a>
                       </div>
                     </div>
                   ) : (
                     <div className="mt-3 space-y-3">
-                      <p className="text-[13px] text-ink-soft">Snapshot dari <span className="font-semibold">Opsi {selected}</span> — {selectedOption.title}. Data internal (biaya/margin) tidak ikut dibagikan.</p>
+                      <p className="text-[13px] text-ink-soft">Snapshot from <span className="font-semibold">Option {selected}</span>: {selectedOption.title}. Internal cost and margin data are not shared.</p>
                       <input
+                        name="agreement-title"
                         className="input"
-                        placeholder="Judul project (mis. Campaign Reels Brand X)"
+                        placeholder="Project title, e.g. August Reels Campaign"
                         value={projectTitle}
                         onChange={(e) => setProjectTitle(e.target.value)}
                         data-testid="agreement-title"
                       />
                       <button onClick={createAgreement} disabled={creating} className="btn-primary btn-md w-full" data-testid="create-agreement">
-                        {creating ? <><Spinner size={16} /> Membuat…</> : <>Buat Lembar Sepakat</>}
+                        {creating ? <><Spinner size={16} /> Creating...</> : <>Create Agreement Sheet</>}
                       </button>
                     </div>
                   )}

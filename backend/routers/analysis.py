@@ -73,27 +73,43 @@ def build_scope(ov: dict) -> dict:
 @router.post("/analyze")
 async def analyze(body: AnalyzeBody, request: Request):
     if len(body.brief.strip()) < 15:
-        raise HTTPException(status_code=422, detail="Brief terlalu pendek untuk dianalisis (min. 15 karakter).")
+        raise HTTPException(status_code=422, detail="Brief is too short to analyze (minimum 15 characters).")
     owner_type, owner_id = await resolve_owner(request)
     brief = body.brief
     redaction = None
     if body.redact:
         redaction = scope_mod.redact_pii(brief)
         brief = redaction["text"]
-    try:
-        extraction = await ai_service.extract_scope(brief)
-    except RuntimeError as e:
-        raise HTTPException(status_code=503,
-                            detail=f"Analisis AI gagal ({e}). Coba lagi, atau gunakan contoh demo yang selalu tersedia.")
+
+    is_seed_demo = brief.strip() == scope_mod.SEED_BRIEF
+    if not body.use_ai and not is_seed_demo:
+        raise HTTPException(status_code=422, detail="No-AI mode is only available for the sample brief.")
+
+    seed = None
+    if is_seed_demo:
+        seed = scope_mod.compute_seed_analysis()
+        extraction = {
+            "fields": seed["fields"],
+            "ambiguities": [],
+            "clarifications": seed["clarifications"],
+        }
+    else:
+        try:
+            extraction = await ai_service.extract_scope(brief)
+        except RuntimeError as e:
+            raise HTTPException(status_code=503,
+                                detail=f"AI analysis failed ({e}). Try again or use the always-available demo sample.")
     analysis_id = uuid.uuid4().hex
     doc = {
         "analysis_id": analysis_id, "owner_type": owner_type, "owner_id": owner_id,
-        "brief": brief, "is_demo": False, "redaction": redaction,
+        "brief": brief, "is_demo": is_seed_demo, "redaction": redaction,
         "state": "NEEDS_CLARIFICATION", "fields": extraction["fields"],
         "ambiguities": extraction.get("ambiguities", []), "clarifications": extraction["clarifications"],
         "estimate": None, "price": None, "options": None,
         "formula_version": pricing.FORMULA_VERSION, "created_at": iso(now_utc()),
     }
+    if seed:
+        doc["scope_used"] = seed["scope_used"]
     await db.brief_analyses.insert_one(doc)
     return clean(doc)
 
@@ -101,10 +117,10 @@ async def analyze(body: AnalyzeBody, request: Request):
 async def _owned_analysis(analysis_id: str, request: Request) -> dict:
     doc = await db.brief_analyses.find_one({"analysis_id": analysis_id})
     if not doc:
-        raise HTTPException(status_code=404, detail="Analisis tidak ditemukan")
+        raise HTTPException(status_code=404, detail="Analysis not found")
     _, owner_id = await resolve_owner(request)
     if doc["owner_id"] != owner_id:
-        raise HTTPException(status_code=403, detail="Tidak diizinkan")
+        raise HTTPException(status_code=403, detail="Not allowed")
     return doc
 
 
@@ -123,14 +139,18 @@ async def delete_analysis(analysis_id: str, request: Request):
 # -------- estimate --------
 def _apply_calibration(est: dict, summary: dict) -> tuple[dict, dict]:
     factor = summary["median_factor"]
+    primary = summary["projects"][0] if summary.get("projects") else {}
     adj_low = round(est["low"] * factor, 1)
     adj_high = round(est["high"] * factor, 1)
     trace = {
-        "median_factor": factor, "count": summary["count"], "confidence": summary["confidence"],
+        "factor": factor, "median_factor": factor, "count": summary["count"], "confidence": summary["confidence"],
+        "project_name": primary.get("project_name", "Personal Estimation Memory"),
+        "estimated_hours": primary.get("estimated_hours"),
+        "actual_hours": primary.get("actual_hours"),
         "projects": summary["projects"], "extreme": factor > 2.5 or factor < 0.4,
         "base_low": est["low"], "base_high": est["high"],
         "adjusted_low": adj_low, "adjusted_high": adj_high,
-        "note": "Sinyal kalibrasi dari riwayat proyekmu — bukan model machine learning.",
+        "note": "Calibration signal from your project history, not a machine-learning model.",
     }
     return {"low": adj_low, "high": adj_high, "breakdown": est["breakdown"], "calibrated": True}, trace
 
@@ -172,7 +192,8 @@ async def estimate(analysis_id: str, body: EstimateBody, request: Request):
         {"price": None, "options": None, "whatsapp": None, "decline": None}
     price, options = parts["price"], parts["options"]
 
-    risk = pricing.risk_triggers(scope, est, price or {"break_even_low": float("inf")})
+    risk_scope = scope if price else {**scope, "client_budget": None}
+    risk = pricing.risk_triggers(risk_scope, est, price or {"break_even_low": float("inf")})
     conf = pricing.confidence_level(completeness["percent"], has_history=calibration_trace is not None,
                                     unresolved_major=scope["unresolved_major_count"])
     result = {
@@ -197,14 +218,14 @@ async def estimate(analysis_id: str, body: EstimateBody, request: Request):
     return result
 
 
-# -------- AI deal copy (warmer Indonesian; numbers stay fixed) --------
+# -------- AI deal copy (polished English; numbers stay fixed) --------
 @router.post("/analysis/{analysis_id}/deal-copy")
 async def deal_copy(analysis_id: str, body: DealCopyBody, request: Request):
     await _owned_analysis(analysis_id, request)
     scope = build_scope(body.scope_overrides)
     opts = body.options
     if len(opts) < 2:
-        raise HTTPException(status_code=422, detail="Butuh minimal dua opsi untuk deal copy.")
+        raise HTTPException(status_code=422, detail="At least two options are required for deal copy.")
     a, b = opts[0], opts[1]
     price_tokens = [scope_mod.format_idr(a["price"]), scope_mod.format_idr(b["price"])]
     params = {
@@ -219,7 +240,7 @@ async def deal_copy(analysis_id: str, body: DealCopyBody, request: Request):
     try:
         drafts = await ai_service.polish_whatsapp(params, price_tokens)
     except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=f"AI deal copy gagal ({e}). Draft template tetap tersedia.")
+        raise HTTPException(status_code=503, detail=f"AI deal copy failed ({e}). Template drafts are still available.")
     return {"whatsapp": drafts, "source": "ai"}
 
 
@@ -230,13 +251,13 @@ async def scope_check(analysis_id: str, body: ScopeCheckBody, request: Request):
     agreement = await db.scope_agreements.find_one({"analysis_id": analysis_id}, {"_id": 0},
                                                    sort=[("created_at", -1)])
     if not agreement:
-        raise HTTPException(status_code=400, detail="Buat Lembar Sepakat dulu sebagai baseline sebelum Scope Check.")
+        raise HTTPException(status_code=400, detail="Create an Agreement Sheet before running Scope Check.")
     baseline = agreement["snapshot"]
 
     try:
         classified = await ai_service.classify_scope_change(baseline, body.new_request)
     except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=f"Scope Check AI gagal ({e}). Coba lagi.")
+        raise HTTPException(status_code=503, detail=f"Scope Check AI failed ({e}). Try again.")
 
     delta_result = None
     if classified["classification"] == "new_scope" and body.delta and body.cost_profile:

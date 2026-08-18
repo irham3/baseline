@@ -1,23 +1,32 @@
 import React from "react";
 import { Quote, CircleCheck, CircleHelp, CircleDashed } from "lucide-react";
 import { Badge } from "@/components/ui/primitives";
+import { idr } from "@/lib/format";
 
 const GROUPS = [
-  { key: "stated", label: "Sudah jelas", en: "Stated", tone: "green", Icon: CircleCheck },
-  { key: "inferred", label: "Masih asumsi", en: "Inferred", tone: "amber", Icon: CircleHelp },
-  { key: "missing", label: "Belum disebutkan", en: "Missing", tone: "neutral", Icon: CircleDashed },
+  { key: "stated", label: "Stated", tone: "green", Icon: CircleCheck },
+  { key: "inferred", label: "Assumed", tone: "amber", Icon: CircleHelp },
+  { key: "missing", label: "Missing", tone: "neutral", Icon: CircleDashed },
 ];
 
 function valueText(f) {
-  if (f.value === null || f.value === undefined || f.value === "") return "—";
-  if (typeof f.value === "boolean") return f.value ? "Ya" : "Tidak";
+  if (f.value === null || f.value === undefined || f.value === "") return "-";
+  if (typeof f.value === "boolean") return f.value ? "Yes" : "No";
+  if (f.name === "client_budget" || f.name === "direct_costs_mentioned") return idr(Number(f.value));
+  if (f.name === "final_duration" || f.name === "final_duration_seconds") return `${f.value} sec`;
+  if (f.name === "footage_hours" || f.name === "footage_volume_minutes") return `${f.value}h`;
+  if (f.name === "deadline_working_days") return `${f.value} days`;
+  if (f.value === "unbounded") return "Unbounded";
+  if (f.value === "basic") return "Basic";
+  if (f.value === "custom") return "Custom";
+  if (f.value === "none") return "None";
   return String(f.value);
 }
 
 export default function BriefMap({ fields }) {
   return (
     <div className="grid gap-4 md:grid-cols-3" data-testid="brief-map">
-      {GROUPS.map(({ key, label, en, tone, Icon }) => {
+      {GROUPS.map(({ key, label, tone, Icon }) => {
         const items = fields.filter((f) => f.status === key);
         return (
           <div key={key} className="card p-4">
@@ -28,9 +37,8 @@ export default function BriefMap({ fields }) {
               </div>
               <Badge tone={tone}>{items.length}</Badge>
             </div>
-            <p className="mb-3 -mt-1 text-[11px] font-medium uppercase tracking-wide text-ink-faint">{en}</p>
             {items.length === 0 ? (
-              <p className="text-sm text-ink-faint">Tidak ada.</p>
+              <p className="text-sm text-ink-faint">Nothing here yet.</p>
             ) : (
               <ul className="space-y-3">
                 {items.map((f) => (
@@ -42,14 +50,14 @@ export default function BriefMap({ fields }) {
                     {f.status === "stated" && f.source_quote && (
                       <p className="mt-1 flex items-start gap-1.5 rounded-lg bg-green-soft/60 px-2 py-1.5 text-[13px] italic text-green-strong">
                         <Quote size={12} className="mt-0.5 shrink-0" />
-                        <span>“{f.source_quote}”</span>
+                        <span>"{f.source_quote}"</span>
                       </p>
                     )}
                     {f.status === "inferred" && f.inference_explanation && (
                       <p className="mt-1 text-[13px] text-ink-faint">{f.inference_explanation}</p>
                     )}
                     {f.status === "missing" && (
-                      <p className="mt-1 text-[13px] text-ink-faint">Perlu ditanyakan sebelum quote.</p>
+                      <p className="mt-1 text-[13px] text-ink-faint">Ask before quoting.</p>
                     )}
                   </li>
                 ))}

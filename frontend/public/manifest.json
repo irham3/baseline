@@ -1,8 +1,22 @@
 {
-  "short_name": "Baseline",
-  "name": "Baseline — pre-deal baseline check",
+  "short_name": "Baseline Work",
+  "name": "Baseline Work: pre-deal scope check",
   "start_url": ".",
   "display": "standalone",
   "theme_color": "#1F6B4A",
-  "background_color": "#F7F5F0"
+  "background_color": "#F7F5F0",
+  "icons": [
+    {
+      "src": "assets/baseline-logo-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/baseline-logo-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }

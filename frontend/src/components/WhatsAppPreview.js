@@ -2,8 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Copy, Check, MessageCircle } from "lucide-react";
 
 const TONES = [
-  { key: "warm", label: "Hangat" },
-  { key: "firm", label: "Tegas" },
+  { key: "warm", label: "Warm" },
+  { key: "firm", label: "Firm" },
   { key: "formal", label: "Formal" },
 ];
 
@@ -54,7 +54,7 @@ export default function WhatsAppPreview({ drafts, declineMode, declineMessage, o
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h4 className="flex items-center gap-2 font-bold text-ink">
           <MessageCircle size={16} className="text-green" />
-          {declineMode ? "Balasan penolakan (WhatsApp)" : "Balasan WhatsApp"}
+          {declineMode ? "Polite decline draft" : "WhatsApp draft"}
         </h4>
         {!declineMode && (
           <div className="flex rounded-full border border-line bg-raised p-0.5" role="tablist">
@@ -76,25 +76,26 @@ export default function WhatsAppPreview({ drafts, declineMode, declineMessage, o
         )}
       </div>
       <textarea
+        name="whatsapp-draft"
         className="textarea min-h-[190px]"
         value={text}
         onChange={(e) => setText(e.target.value)}
         data-testid="whatsapp-textarea"
-        aria-label="Draft pesan WhatsApp"
+        aria-label="WhatsApp message draft"
       />
       <div className="mt-3 flex items-center justify-between gap-3">
-        <p className="text-[12px] text-ink-faint">Bisa diedit. Tidak dikirim otomatis.</p>
+        <p className="text-[12px] text-ink-faint">Editable. Baseline Work never sends automatically.</p>
         <button
           onClick={handleCopy}
           className="btn-primary btn-sm"
           data-testid="whatsapp-copy"
         >
-          {state === "ok" ? <><Check size={15} /> Tersalin</> : <><Copy size={15} /> Salin pesan</>}
+          {state === "ok" ? <><Check size={15} /> Copied</> : <><Copy size={15} /> Copy draft</>}
         </button>
       </div>
       {state === "error" && (
         <p className="mt-2 text-[12px] font-semibold text-danger" data-testid="clipboard-error">
-          Gagal menyalin otomatis. Pilih teks di atas lalu salin manual.
+          Automatic copy failed. Select the text above and copy it manually.
         </p>
       )}
     </div>

@@ -3,9 +3,9 @@ import { TriangleAlert, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/primitives";
 
 const LEVEL = {
-  high: { tone: "danger", label: "HIGH RISK", text: "text-danger" },
-  medium: { tone: "amber", label: "MEDIUM RISK", text: "text-amber" },
-  low: { tone: "green", label: "LOW RISK", text: "text-green-strong" },
+  high: { tone: "danger", label: "High risk", text: "text-danger" },
+  medium: { tone: "amber", label: "Medium risk", text: "text-amber" },
+  low: { tone: "green", label: "Low risk", text: "text-green-strong" },
 };
 
 export default function RiskTriggers({ risk }) {
@@ -20,10 +20,10 @@ export default function RiskTriggers({ risk }) {
           <TriangleAlert size={18} className={meta.text} />
         )}
         <Badge tone={meta.tone} data-testid="risk-level">{meta.label}</Badge>
-        <span className="text-sm text-ink-faint">Dipicu oleh aturan, bukan skor.</span>
+        <span className="text-sm text-ink-faint">Rule-triggered, not a model score.</span>
       </div>
       {risk.triggers.length === 0 ? (
-        <p className="text-sm text-ink-soft">Tidak ada pemicu risiko. Scope terlihat sehat.</p>
+        <p className="text-sm text-ink-soft">No risk triggers. The scope looks healthy.</p>
       ) : (
         <ul className="space-y-2">
           {risk.triggers.map((t) => (

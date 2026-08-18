@@ -98,7 +98,7 @@ def test_analyze_structure_and_verbatim(analysis_ctx):
 
 
 def test_analyze_missing_guest_still_ok():
-    # No X-Guest-Id → backend assigns one, still 200
+    # No X-Guest-Id means backend assigns one, still 200
     r = requests.post(f"{API}/analyze",
                       json={"brief": "Butuh 5 reels TikTok buat produk skincare, deadline 2 minggu."},
                       headers={"Content-Type": "application/json"}, timeout=90)
@@ -116,7 +116,7 @@ def test_prompt_injection_no_price_no_leak():
         pytest.skip(f"AI unavailable: {r.status_code}")
     doc = r.json()
     assert doc.get("price") in (None, {}), "price must not appear from analyze"
-    # Remove echoed brief from dump — the brief itself contains the injection strings
+    # Remove echoed brief from dump; the brief itself contains the injection strings
     doc_no_brief = {k: v for k, v in doc.items() if k != "brief"}
     dumped = str(doc_no_brief).lower()
     assert "system prompt" not in dumped, "system prompt leaked in extracted fields"

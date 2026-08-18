@@ -17,7 +17,7 @@ export function Badge({ tone = "neutral", children, className, ...rest }) {
   );
 }
 
-export function DemoTag({ className, children = "Ilustrasi demo" }) {
+export function DemoTag({ className, children = "Demo data" }) {
   return (
     <span
       className={clsx(
@@ -45,7 +45,7 @@ export function Stat({ label, value, sub, tone }) {
   return (
     <div>
       <div className="text-[13px] font-medium text-ink-faint">{label}</div>
-      <div className={clsx("mt-0.5 text-lg font-bold tracking-tight", tone === "danger" && "text-danger", tone === "green" && "text-green-strong")}>
+      <div className={clsx("mt-0.5 text-lg font-bold", tone === "danger" && "text-danger", tone === "green" && "text-green-strong")}>
         {value}
       </div>
       {sub && <div className="text-xs text-ink-faint">{sub}</div>}
@@ -59,7 +59,7 @@ export function Spinner({ size = 18 }) {
       className="inline-block animate-spin rounded-full border-2 border-current border-t-transparent"
       style={{ width: size, height: size }}
       role="status"
-      aria-label="Memuat"
+      aria-label="Loading"
     />
   );
 }
@@ -77,5 +77,23 @@ export function Toast({ show, children }) {
         {children}
       </div>
     </div>
+  );
+}
+
+export function SpotlightCard({ as: Component = "div", className, children, ...rest }) {
+  const handleMove = (event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    event.currentTarget.style.setProperty("--spot-x", `${event.clientX - rect.left}px`);
+    event.currentTarget.style.setProperty("--spot-y", `${event.clientY - rect.top}px`);
+  };
+
+  return (
+    <Component
+      className={clsx("spotlight-card", className)}
+      onPointerMove={handleMove}
+      {...rest}
+    >
+      {children}
+    </Component>
   );
 }
