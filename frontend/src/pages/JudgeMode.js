@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, ArrowLeft, Quote, FastForward, ExternalLink, Check, History, PartyPopper } from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { ArrowRight, ArrowLeft, Quote, FastForward, ExternalLink, Check, History, CheckCircle2 } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { Badge, DemoTag, Spinner } from "@/components/ui/primitives";
 import { client, track } from "@/lib/api";
-import { idr, idrJuta, hoursRange } from "@/lib/format";
+import { idr, idrCompact, hoursRange, plural } from "@/lib/format";
 
 const STEPS = ["Brief", "Hidden work", "Clarification", "Price floor", "Decision"];
 
@@ -13,9 +13,10 @@ export default function JudgeMode() {
   const [seed, setSeed] = useState(null);
   const [step, setStep] = useState(0);
   const [selected, setSelected] = useState("B");
-  const [tokenState, setTokenState] = useState({ loading: false, token: null });
+  const [tokenState, setTokenState] = useState({ loading: false, token: null, error: null });
   const startRef = useRef(Date.now());
   const [elapsed, setElapsed] = useState(0);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     track("demo_started", { mode: "judge" });
@@ -34,13 +35,13 @@ export default function JudgeMode() {
   );
 
   const createLink = async () => {
-    setTokenState({ loading: true, token: null });
+    setTokenState({ loading: true, token: null, error: null });
     try {
       const { data } = await client.post("/demo/agreement", { option_id: selected });
-      setTokenState({ loading: false, token: data.token });
+      setTokenState({ loading: false, token: data.token, error: null });
       track("agreement_created", { mode: "judge", option: selected });
     } catch (_) {
-      setTokenState({ loading: false, token: null });
+      setTokenState({ loading: false, token: null, error: "Failed to create link. Try again." });
     }
   };
 
@@ -83,33 +84,33 @@ export default function JudgeMode() {
         <AnimatePresence mode="wait">
           <motion.div
             key={step}
-            initial={{ opacity: 0, y: 10 }}
+            initial={reduceMotion ? false : { opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
+            transition={{ duration: reduceMotion ? 0 : 0.32, ease: [0.22, 1, 0.36, 1] }}
           >
             {/* STEP 1 */}
             {step === 0 && (
               <div className="space-y-4" data-testid="judge-step-0">
-                <h2 className="text-2xl font-extrabold tracking-tight text-ink">Kelihatannya jelas.</h2>
+                <h2 className="text-2xl font-extrabold text-ink">It looks clear at first.</h2>
                 <div className="card p-5">
                   <div className="max-w-[92%] rounded-2xl rounded-tl-md bg-raised px-4 py-3 text-[15px] leading-relaxed text-ink">
-                    “{seed.brief}”
+                    "{seed.brief}"
                   </div>
                   <div className="mt-4 flex flex-wrap gap-4">
                     <div><div className="text-xs text-ink-faint">Deliverable</div><div className="font-bold text-ink">12 Reels</div></div>
-                    <div><div className="text-xs text-ink-faint">Budget klien</div><div className="font-bold text-ink">{idrJuta(3000000)}</div></div>
-                    <div><div className="text-xs text-ink-faint">Deadline</div><div className="font-bold text-ink">Minggu depan</div></div>
+                    <div><div className="text-xs text-ink-faint">Client budget</div><div className="font-bold text-ink">{idrCompact(3000000)}</div></div>
+                    <div><div className="text-xs text-ink-faint">Deadline</div><div className="font-bold text-ink">Next week</div></div>
                   </div>
                 </div>
-                <p className="text-ink-soft">Sebenarnya ada banyak pekerjaan yang belum dihargai. Lanjut untuk melihatnya.</p>
+                <p className="text-ink-soft">The hidden work is what makes the quote unsafe. Keep going to see it.</p>
               </div>
             )}
 
             {/* STEP 2 */}
             {step === 1 && (
               <div className="space-y-4" data-testid="judge-step-1">
-                <h2 className="text-2xl font-extrabold tracking-tight text-ink">
+                <h2 className="text-2xl font-extrabold text-ink">
                   {hidden.length} hidden variables found.
                 </h2>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -118,15 +119,15 @@ export default function JudgeMode() {
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-semibold text-ink">{f.label}</span>
                         <Badge tone={f.status === "inferred" ? "amber" : "neutral"}>
-                          {f.status === "inferred" ? "Asumsi" : "Belum disebut"}
+                          {f.status === "inferred" ? "Assumed" : "Missing"}
                         </Badge>
                       </div>
                       {f.source_quote ? (
                         <p className="mt-1.5 flex items-start gap-1.5 text-[13px] italic text-green-strong">
-                          <Quote size={12} className="mt-0.5 shrink-0" /> “{f.source_quote}”
+                          <Quote size={12} className="mt-0.5 shrink-0" /> "{f.source_quote}"
                         </p>
                       ) : (
-                        <p className="mt-1.5 text-[13px] text-ink-faint">{f.inference_explanation || "Tidak ditemukan di chat."}</p>
+                        <p className="mt-1.5 text-[13px] text-ink-faint">{f.inference_explanation || "Not found in the brief."}</p>
                       )}
                     </div>
                   ))}
@@ -137,12 +138,12 @@ export default function JudgeMode() {
             {/* STEP 3 */}
             {step === 2 && (
               <div className="space-y-4" data-testid="judge-step-2">
-                <h2 className="text-2xl font-extrabold tracking-tight text-ink">Ask this before you quote.</h2>
+                <h2 className="text-2xl font-extrabold text-ink">Ask this before you quote.</h2>
                 <div className="card divide-y divide-line">
                   {seed.clarifications.map((q, i) => (
                     <div key={q.id} className="p-4">
                       <p className="text-sm font-semibold text-ink">{i + 1}. {q.question}</p>
-                      <p className="mt-0.5 text-[13px] text-amber"><span className="font-semibold">Mengapa: </span>{q.why}</p>
+                      <p className="mt-0.5 text-[13px] text-amber"><span className="font-semibold">Why: </span>{q.why}</p>
                       <p className="mt-1 flex items-center gap-1.5 text-[13px] text-green-strong">
                         <Check size={13} /> {q.answer}
                       </p>
@@ -155,23 +156,23 @@ export default function JudgeMode() {
             {/* STEP 4 */}
             {step === 3 && (
               <div className="space-y-4" data-testid="judge-step-3">
-                <h2 className="text-2xl font-extrabold tracking-tight text-ink">Not enough budget for an honest price yet.</h2>
+                <h2 className="text-2xl font-extrabold text-ink">Not enough budget for an honest price yet.</h2>
                 <div className="card p-5">
                   <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    <div className="rounded-xl bg-raised p-3"><div className="text-[12px] text-ink-faint">Estimasi jam</div><div className="text-lg font-extrabold text-ink">{hoursRange(seed.estimate.low, seed.estimate.high)}</div></div>
-                    <div className="rounded-xl bg-raised p-3"><div className="text-[12px] text-ink-faint">Break-even</div><div className="text-lg font-extrabold text-ink">{idrJuta(seed.price.break_even_low)}</div><div className="text-[11px] text-ink-faint">s/d {idrJuta(seed.price.break_even_high)}</div></div>
-                    <div className="rounded-xl bg-raised p-3"><div className="text-[12px] text-ink-faint">Price floor</div><div className="text-lg font-extrabold text-green-strong">{idrJuta(seed.price.price_floor_low)}</div><div className="text-[11px] text-ink-faint">s/d {idrJuta(seed.price.price_floor_high)}</div></div>
-                    <div className="rounded-xl bg-raised p-3"><div className="text-[12px] text-ink-faint">Budget klien</div><div className="text-lg font-extrabold text-danger">{idrJuta(seed.price.client_budget)}</div><div className="text-[11px] text-ink-faint">Gap {idrJuta(seed.price.price_floor_gap_low)}</div></div>
+                    <div className="rounded-xl bg-raised p-3"><div className="text-[12px] text-ink-faint">Estimated hours</div><div className="text-lg font-extrabold text-ink">{hoursRange(seed.estimate.low, seed.estimate.high)}</div></div>
+                    <div className="rounded-xl bg-raised p-3"><div className="text-[12px] text-ink-faint">Break-even</div><div className="text-lg font-extrabold text-ink">{idrCompact(seed.price.break_even_low)}</div><div className="text-[11px] text-ink-faint">to {idrCompact(seed.price.break_even_high)}</div></div>
+                    <div className="rounded-xl bg-raised p-3"><div className="text-[12px] text-ink-faint">Price floor</div><div className="text-lg font-extrabold text-green-strong">{idrCompact(seed.price.price_floor_low)}</div><div className="text-[11px] text-ink-faint">to {idrCompact(seed.price.price_floor_high)}</div></div>
+                    <div className="rounded-xl bg-raised p-3"><div className="text-[12px] text-ink-faint">Client budget</div><div className="text-lg font-extrabold text-danger">{idrCompact(seed.price.client_budget)}</div><div className="text-[11px] text-ink-faint">Gap {idrCompact(seed.price.price_floor_gap_low)}</div></div>
                   </div>
-                  <p className="mt-3 text-[12px] text-ink-faint">Cost per hour {idr(seed.cost_profile.cost_per_hour)} · target margin {Math.round(seed.cost_profile.target_margin * 100)}%. Harga aman belum berarti harga pasti.</p>
+                  <p className="mt-3 text-[12px] text-ink-faint">Cost per hour {idr(seed.cost_profile.cost_per_hour)}, target margin {Math.round(seed.cost_profile.target_margin * 100)}%. A safe floor is not the final price.</p>
                 </div>
                 <div className="card border-amber/40 p-5" data-testid="judge-calibration">
                   <div className="mb-1 flex items-center gap-2">
                     <History size={16} className="text-amber" />
-                    <span className="font-bold text-ink">Sinyal kalibrasi satu proyek</span>
-                    <Badge tone="amber">Confidence rendah</Badge>
+                    <span className="font-bold text-ink">One-project calibration signal</span>
+                    <Badge tone="amber">Low confidence</Badge>
                   </div>
-                  <p className="text-[13px] text-ink-soft">Proyek lama serupa: estimasi <span className="mono">24 jam</span> vs aktual <span className="mono">37 jam</span> → faktor <span className="mono font-semibold">×1,54</span>. Hanya satu riwayat, jadi diperlakukan sebagai sinyal awal.</p>
+                  <p className="text-[13px] text-ink-soft">Similar past project: estimated <span className="mono">24h</span> vs actual <span className="mono">37h</span>, producing factor <span className="mono font-semibold">x1.54</span>. One data point means signal, not certainty.</p>
                 </div>
               </div>
             )}
@@ -179,7 +180,7 @@ export default function JudgeMode() {
             {/* STEP 5 */}
             {step === 4 && (
               <div className="space-y-4" data-testid="judge-step-4">
-                <h2 className="text-2xl font-extrabold tracking-tight text-ink">Three decisions, ready to send.</h2>
+                <h2 className="text-2xl font-extrabold text-ink">Three decisions, ready to send.</h2>
                 <div className="grid gap-3 sm:grid-cols-3">
                   {seed.options.map((o) => (
                     <button
@@ -188,10 +189,12 @@ export default function JudgeMode() {
                       className={`card p-4 text-left transition-all duration-200 hover:-translate-y-0.5 ${selected === o.id ? "border-green ring-2 ring-green/25" : ""}`}
                       data-testid={`judge-option-${o.id}`}
                     >
-                      <div className="text-[11px] font-bold uppercase text-ink-faint">Opsi {o.id}</div>
+                      <div className="text-[11px] font-bold text-ink-faint">Option {o.id}</div>
                       <div className="text-sm font-bold text-ink">{o.title}</div>
                       <div className="mt-1 text-xl font-extrabold text-green-strong">{idr(o.price)}</div>
-                      <div className="text-[12px] text-ink-faint">{o.quantity} video · {o.revision_rounds} revisi · {o.timeline_days}h</div>
+                      <div className="text-[12px] text-ink-faint">
+                        {o.quantity} {plural(o.quantity, "video")}, {o.revision_rounds} {plural(o.revision_rounds, "revision")}, {o.timeline_days} days
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -199,32 +202,37 @@ export default function JudgeMode() {
                 <div className="card p-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h3 className="font-bold text-ink">Lembar Sepakat</h3>
-                      <p className="text-[13px] text-ink-faint">Link publik, tanpa login klien, token acak.</p>
+                      <h3 className="font-bold text-ink">Agreement Sheet</h3>
+                      <p className="text-[13px] text-ink-faint">Public link, no client login, random token.</p>
                     </div>
                     {tokenState.token ? (
                       <a href={`/s/${tokenState.token}`} target="_blank" rel="noreferrer" className="btn-primary btn-md" data-testid="judge-open-agreement">
-                        Buka Lembar Sepakat <ExternalLink size={16} />
+                        Open Agreement Sheet <ExternalLink size={16} />
                       </a>
                     ) : (
                       <button onClick={createLink} disabled={tokenState.loading} className="btn-primary btn-md" data-testid="judge-create-agreement">
-                        {tokenState.loading ? <><Spinner size={16} /> Membuat…</> : <>Buat link Lembar Sepakat <ArrowRight size={16} /></>}
+                        {tokenState.loading ? <><Spinner size={16} /> Creating...</> : <>Create Agreement Link <ArrowRight size={16} /></>}
                       </button>
                     )}
                   </div>
+                  {tokenState.error && (
+                    <p className="mt-3 text-[13px] font-semibold text-danger" data-testid="judge-link-error" aria-live="polite">
+                      {tokenState.error}
+                    </p>
+                  )}
                 </div>
 
                 {/* Outcome card */}
                 <div className="card bg-ink p-6 text-white" data-testid="judge-outcome">
                   <div className="flex items-center gap-2">
-                    <PartyPopper size={18} className="text-green-soft" />
-                    <span className="text-sm font-bold uppercase tracking-wide text-white/70">Outcome card · demo</span>
+                    <CheckCircle2 size={18} className="text-green-soft" />
+                    <span className="text-sm font-bold text-white/70">Demo outcome</span>
                   </div>
                   <p className="mt-2 text-[17px] font-semibold leading-snug">
-                    Baseline surfaced {hidden.length} unpriced variables and a price floor of {idrJuta(seed.price.price_floor_low)}–{idrJuta(seed.price.price_floor_high)} against a {idrJuta(seed.price.client_budget)} budget.
+                    Baseline Work surfaced {hidden.length} unpriced variables and a price floor of {idrCompact(seed.price.price_floor_low)} to {idrCompact(seed.price.price_floor_high)} against a {idrCompact(seed.price.client_budget)} budget.
                   </p>
                   <p className="mt-2 text-[14px] text-white/70">
-                    The freelancer can keep the budget with Option A ({idr(seed.options[0].price)}, 6 Reels) or hold full scope with Option B ({idr(seed.options[1].price)}). All numbers are illustrative demo data — not market truth, not realized savings.
+                    The freelancer can keep the budget with Option A ({idr(seed.options[0].price)}, 6 Reels) or hold full scope with Option B ({idr(seed.options[1].price)}). All numbers are illustrative demo data, not market truth or realized savings.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-3">
                     <Link to="/analyze" className="btn btn-md bg-white text-ink hover:bg-white/90" data-testid="judge-try-own">Analyze your own brief</Link>
@@ -239,7 +247,7 @@ export default function JudgeMode() {
         {/* Controls */}
         <div className="mt-6 flex items-center justify-between">
           <button onClick={back} disabled={step === 0} className="btn-ghost btn-md" data-testid="judge-back">
-            <ArrowLeft size={16} /> Kembali
+            <ArrowLeft size={16} /> Back
           </button>
           <div className="flex items-center gap-2">
             {step < STEPS.length - 1 && (
@@ -249,7 +257,7 @@ export default function JudgeMode() {
             )}
             {step < STEPS.length - 1 && (
               <button onClick={next} className="btn-primary btn-md" data-testid="judge-next">
-                Lanjut <ArrowRight size={16} />
+                Next <ArrowRight size={16} />
               </button>
             )}
           </div>
