@@ -1,0 +1,273 @@
+"""Analysis routes: analyze, estimate, deal-copy, scope-check, redact, demo seed."""
+from __future__ import annotations
+
+import uuid
+
+from fastapi import APIRouter, Request, HTTPException
+
+import pricing
+import scope as scope_mod
+import ai_service
+import core
+from core import db, now_utc, iso, clean, resolve_user, resolve_owner
+from models import AnalyzeBody, CostProfileBody, EstimateBody, DealCopyBody, ScopeCheckBody
+
+router = APIRouter(prefix="/api")
+
+
+# -------- demo + redact --------
+@router.get("/demo/seed")
+async def demo_seed():
+    return scope_mod.compute_seed_analysis()
+
+
+@router.post("/redact")
+async def redact(body: AnalyzeBody):
+    return scope_mod.redact_pii(body.brief)
+
+
+# -------- cost profile helper --------
+def compute_cost_per_hour(cp: CostProfileBody):
+    if cp.cost_per_hour and cp.cost_per_hour > 0:
+        return float(cp.cost_per_hour), True
+    fields = [cp.target_take_home, cp.monthly_overhead, cp.monthly_reserve,
+              cp.total_working_hours, cp.billable_utilization]
+    if any(v is None for v in fields):
+        return None, False
+    try:
+        return pricing.productive_cost_per_hour(
+            cp.target_take_home, cp.monthly_overhead, cp.monthly_reserve,
+            cp.total_working_hours, cp.billable_utilization,
+        ), True
+    except ValueError:
+        return None, False
+
+
+def build_scope(ov: dict) -> dict:
+    scope = {
+        "quantity": ov.get("quantity"),
+        "final_duration": ov.get("final_duration"),
+        "aspect_ratio": ov.get("aspect_ratio", "9:16"),
+        "footage_available": ov.get("footage_available", True),
+        "footage_preselected": ov.get("footage_preselected"),
+        "footage_hours": ov.get("footage_hours"),
+        "scripting": ov.get("scripting", False),
+        "subtitles": ov.get("subtitles", True),
+        "audio_cleanup": ov.get("audio_cleanup", True),
+        "color_correction": ov.get("color_correction", True),
+        "motion_level": ov.get("motion_level", "basic"),
+        "approver_count": ov.get("approver_count") or 1,
+        "revision_rounds": ov.get("revision_rounds"),
+        "deadline_working_days": ov.get("deadline_working_days"),
+        "client_budget": ov.get("client_budget"),
+        "rush": ov.get("rush", False),
+    }
+    if not scope["footage_preselected"] and scope["footage_available"] and not scope["footage_hours"]:
+        scope["footage_hours"] = 2
+    majors = ["final_duration", "footage_preselected", "footage_hours", "approver_count", "revision_rounds"]
+    scope["unresolved_major_count"] = sum(1 for m in majors if ov.get(m) in (None, ""))
+    return scope
+
+
+# -------- analyze --------
+@router.post("/analyze")
+async def analyze(body: AnalyzeBody, request: Request):
+    if len(body.brief.strip()) < 15:
+        raise HTTPException(status_code=422, detail="Brief terlalu pendek untuk dianalisis (min. 15 karakter).")
+    owner_type, owner_id = await resolve_owner(request)
+    brief = body.brief
+    redaction = None
+    if body.redact:
+        redaction = scope_mod.redact_pii(brief)
+        brief = redaction["text"]
+    try:
+        extraction = await ai_service.extract_scope(brief)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503,
+                            detail=f"Analisis AI gagal ({e}). Coba lagi, atau gunakan contoh demo yang selalu tersedia.")
+    analysis_id = uuid.uuid4().hex
+    doc = {
+        "analysis_id": analysis_id, "owner_type": owner_type, "owner_id": owner_id,
+        "brief": brief, "is_demo": False, "redaction": redaction,
+        "state": "NEEDS_CLARIFICATION", "fields": extraction["fields"],
+        "ambiguities": extraction.get("ambiguities", []), "clarifications": extraction["clarifications"],
+        "estimate": None, "price": None, "options": None,
+        "formula_version": pricing.FORMULA_VERSION, "created_at": iso(now_utc()),
+    }
+    await db.brief_analyses.insert_one(doc)
+    return clean(doc)
+
+
+async def _owned_analysis(analysis_id: str, request: Request) -> dict:
+    doc = await db.brief_analyses.find_one({"analysis_id": analysis_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analisis tidak ditemukan")
+    _, owner_id = await resolve_owner(request)
+    if doc["owner_id"] != owner_id:
+        raise HTTPException(status_code=403, detail="Tidak diizinkan")
+    return doc
+
+
+@router.get("/analysis/{analysis_id}")
+async def get_analysis(analysis_id: str, request: Request):
+    return clean(await _owned_analysis(analysis_id, request))
+
+
+@router.delete("/analysis/{analysis_id}")
+async def delete_analysis(analysis_id: str, request: Request):
+    await _owned_analysis(analysis_id, request)
+    await db.brief_analyses.delete_one({"analysis_id": analysis_id})
+    return {"ok": True}
+
+
+# -------- estimate --------
+def _apply_calibration(est: dict, summary: dict) -> tuple[dict, dict]:
+    factor = summary["median_factor"]
+    adj_low = round(est["low"] * factor, 1)
+    adj_high = round(est["high"] * factor, 1)
+    trace = {
+        "median_factor": factor, "count": summary["count"], "confidence": summary["confidence"],
+        "projects": summary["projects"], "extreme": factor > 2.5 or factor < 0.4,
+        "base_low": est["low"], "base_high": est["high"],
+        "adjusted_low": adj_low, "adjusted_high": adj_high,
+        "note": "Sinyal kalibrasi dari riwayat proyekmu — bukan model machine learning.",
+    }
+    return {"low": adj_low, "high": adj_high, "breakdown": est["breakdown"], "calibrated": True}, trace
+
+
+def _build_pricing(scope: dict, cph: float, target_margin: float, est: dict) -> dict:
+    out = {"price": None, "options": None, "whatsapp": None, "decline": None}
+    buffers = scope_mod.derive_buffers(scope)
+    out["price"] = pricing.price_estimate(est["low"], est["high"], cph, 0.0, buffers,
+                                          target_margin, scope.get("client_budget"))
+    if scope.get("client_budget"):
+        options = scope_mod.build_options(scope, cph, target_margin, scope["client_budget"])
+        out["options"] = options
+        out["whatsapp"] = {t: scope_mod.whatsapp_message(scope, options, t) for t in ("warm", "firm", "formal")}
+        out["decline"] = scope_mod.decline_message(scope)
+    return out
+
+
+@router.post("/analysis/{analysis_id}/estimate")
+async def estimate(analysis_id: str, body: EstimateBody, request: Request):
+    doc = await _owned_analysis(analysis_id, request)
+    scope = build_scope(body.scope_overrides)
+    est = pricing.estimate_hours(scope)
+    cph, complete = compute_cost_per_hour(body.cost_profile)
+    target_margin = body.cost_profile.target_margin
+
+    calibration_trace = None
+    if body.apply_calibration:
+        u = await resolve_user(request)
+        if u:
+            summary = await core.calibration_summary(u["user_id"])
+            if summary:
+                est, calibration_trace = _apply_calibration(est, summary)
+
+    completeness = pricing.scope_completeness(
+        len(scope_mod.REQUIRED_FIELDS) - scope["unresolved_major_count"] - 2,
+        len(scope_mod.REQUIRED_FIELDS),
+    )
+    parts = _build_pricing(scope, cph, target_margin, est) if (complete and cph) else \
+        {"price": None, "options": None, "whatsapp": None, "decline": None}
+    price, options = parts["price"], parts["options"]
+
+    risk = pricing.risk_triggers(scope, est, price or {"break_even_low": float("inf")})
+    conf = pricing.confidence_level(completeness["percent"], has_history=calibration_trace is not None,
+                                    unresolved_major=scope["unresolved_major_count"])
+    result = {
+        "estimate": est, "price": price, "price_available": price is not None,
+        "cost_profile_complete": complete, "scope_completeness": completeness,
+        "risk": risk, "confidence": conf, "options": options,
+        "whatsapp": parts["whatsapp"], "decline_message": parts["decline"],
+        "calibration_trace": calibration_trace, "scope_used": scope,
+        "formula_version": pricing.FORMULA_VERSION,
+    }
+    await db.brief_analyses.update_one(
+        {"analysis_id": doc["analysis_id"]},
+        {"$set": {
+            "state": "ESTIMATED" if price else "READY_TO_ESTIMATE",
+            "estimate": est, "price": price, "options": options, "risk": risk,
+            "confidence": conf, "scope_completeness": completeness,
+            "whatsapp": parts["whatsapp"], "decline_message": parts["decline"],
+            "cost_profile": {**body.cost_profile.model_dump(), "cost_per_hour": round(cph) if cph else None},
+            "scope_used": scope, "calibration_trace": calibration_trace, "updated_at": iso(now_utc()),
+        }},
+    )
+    return result
+
+
+# -------- AI deal copy (warmer Indonesian; numbers stay fixed) --------
+@router.post("/analysis/{analysis_id}/deal-copy")
+async def deal_copy(analysis_id: str, body: DealCopyBody, request: Request):
+    await _owned_analysis(analysis_id, request)
+    scope = build_scope(body.scope_overrides)
+    opts = body.options
+    if len(opts) < 2:
+        raise HTTPException(status_code=422, detail="Butuh minimal dua opsi untuk deal copy.")
+    a, b = opts[0], opts[1]
+    price_tokens = [scope_mod.format_idr(a["price"]), scope_mod.format_idr(b["price"])]
+    params = {
+        "quantity": scope.get("quantity"),
+        "client_budget": scope_mod.format_idr(scope.get("client_budget")),
+        "option_a": {"price": scope_mod.format_idr(a["price"]), "videos": a["quantity"],
+                     "revisions": a["revision_rounds"], "timeline_days": a["timeline_days"]},
+        "option_b": {"price": scope_mod.format_idr(b["price"]), "videos": b["quantity"],
+                     "revisions": b["revision_rounds"], "timeline_days": b["timeline_days"],
+                     "includes_footage_selection": b.get("footage_selection_included", True)},
+    }
+    try:
+        drafts = await ai_service.polish_whatsapp(params, price_tokens)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=f"AI deal copy gagal ({e}). Draft template tetap tersedia.")
+    return {"whatsapp": drafts, "source": "ai"}
+
+
+# -------- Scope Check (P0.5) --------
+@router.post("/analysis/{analysis_id}/scope-check")
+async def scope_check(analysis_id: str, body: ScopeCheckBody, request: Request):
+    doc = await _owned_analysis(analysis_id, request)
+    agreement = await db.scope_agreements.find_one({"analysis_id": analysis_id}, {"_id": 0},
+                                                   sort=[("created_at", -1)])
+    if not agreement:
+        raise HTTPException(status_code=400, detail="Buat Lembar Sepakat dulu sebagai baseline sebelum Scope Check.")
+    baseline = agreement["snapshot"]
+
+    try:
+        classified = await ai_service.classify_scope_change(baseline, body.new_request)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=f"Scope Check AI gagal ({e}). Coba lagi.")
+
+    delta_result = None
+    if classified["classification"] == "new_scope" and body.delta and body.cost_profile:
+        cph, complete = compute_cost_per_hour(body.cost_profile)
+        base_scope = doc.get("scope_used")
+        if complete and cph and base_scope:
+            delta = body.delta
+            new_scope = dict(base_scope)
+            new_scope["quantity"] = (base_scope.get("quantity") or 0) + int(delta.get("added_videos") or 0)
+            if delta.get("add_motion"):
+                new_scope["motion_level"] = "custom"
+            base_rr = base_scope.get("revision_rounds") or 0
+            new_scope["revision_rounds"] = base_rr + int(delta.get("added_revisions") or 0)
+            tm = body.cost_profile.target_margin
+            est_base = pricing.estimate_hours(base_scope)
+            est_new = pricing.estimate_hours(new_scope)
+            p_base = pricing.price_estimate(est_base["low"], est_base["high"], cph, 0.0,
+                                            scope_mod.derive_buffers(base_scope), tm)
+            p_new = pricing.price_estimate(est_new["low"], est_new["high"], cph, 0.0,
+                                           scope_mod.derive_buffers(new_scope), tm)
+            delta_result = {
+                "hours_delta_low": round(est_new["low"] - est_base["low"], 1),
+                "hours_delta_high": round(est_new["high"] - est_base["high"], 1),
+                "price_delta_low": max(0, p_new["price_floor_low"] - p_base["price_floor_low"]),
+                "price_delta_high": max(0, p_new["price_floor_high"] - p_base["price_floor_high"]),
+                "new_quantity": new_scope["quantity"],
+            }
+
+    whatsapp = scope_mod.scope_change_message(
+        classified["classification"], delta_result, classified.get("clarification_question"))
+
+    await db.brief_analyses.update_one({"analysis_id": analysis_id},
+                                       {"$set": {"last_scope_check_at": iso(now_utc())}})
+    return {**classified, "delta_result": delta_result, "whatsapp": whatsapp}

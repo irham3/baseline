@@ -306,6 +306,56 @@ def _seed_clarifications() -> list[dict]:
 
 
 def resolved_seed_scope() -> dict:
+
+
+def agreement_snapshot(opt: dict, project_title: str, client_name: Optional[str] = None, is_demo: bool = False) -> dict:
+    """Build the client-facing immutable snapshot from a selected option. No internal cost data."""
+    deliverables = [
+        f"{opt.get('quantity')} video vertikal (maks 45 detik, 9:16)",
+        "Subtitle" if opt.get("subtitles", True) else None,
+        "Pemilihan footage" if opt.get("footage_selection_included") else None,
+        f"{opt.get('revision_rounds')} putaran revisi terkonsolidasi",
+        "1 file final 1080x1920 per video",
+    ]
+    return {
+        "project_title": project_title,
+        "client_name": client_name,
+        "is_demo": is_demo,
+        "option_type": opt.get("type"),
+        "option_title": opt.get("title"),
+        "quantity": opt.get("quantity"),
+        "price": opt.get("price"),
+        "timeline_days": opt.get("timeline_days"),
+        "revision_rounds": opt.get("revision_rounds"),
+        "subtitles": opt.get("subtitles", True),
+        "footage_selection_included": opt.get("footage_selection_included", False),
+        "exclusions": opt.get("exclusions", []),
+        "conditions": opt.get("conditions", []),
+        "deliverables": [d for d in deliverables if d],
+    }
+
+
+def scope_change_message(classification: str, delta_result: Optional[dict] = None,
+                         clarification: Optional[str] = None) -> str:
+    if classification == "included":
+        return ("Halo, Kak! Terima kasih. Permintaan ini masih termasuk dalam scope yang kita sepakati, "
+                "jadi bisa saya kerjakan tanpa biaya tambahan. Saya lanjutkan ya. 🙏")
+    if classification == "revision":
+        return ("Siap, Kak. Ini masuk sebagai revisi dalam putaran yang sudah disepakati. "
+                "Saya kerjakan sesuai catatan feedback ya. 🙏")
+    if classification == "new_scope":
+        extra = ""
+        if delta_result:
+            extra = (f" Karena ini menambah scope, ada tambahan sekitar "
+                     f"{format_idr(delta_result['price_delta_low'])}–{format_idr(delta_result['price_delta_high'])} "
+                     f"dan ± {delta_result['hours_delta_low']:.0f}–{delta_result['hours_delta_high']:.0f} jam kerja.")
+        return ("Halo, Kak! Dengan senang hati saya bantu. Permintaan ini di luar scope yang kita sepakati "
+                f"sebelumnya, jadi ini menggeser baseline awal.{extra} Boleh saya kirim penyesuaiannya dulu "
+                "sebelum lanjut ya? 🙏")
+    # unclear
+    q = clarification or "Boleh dijelaskan sedikit lebih detail maksud permintaannya?"
+    return f"Halo, Kak! Supaya saya bisa pastikan ini masuk scope atau tidak: {q}"
+
     return {
         "quantity": 12,
         "final_duration": 45,
