@@ -1,6 +1,6 @@
 """
 Short-form video scope template, deterministic deal-option builder, PII redaction,
-Indonesian copy templates, and the seeded demo fixture.
+English copy templates, and the seeded demo fixture.
 
 Numeric option parameters are ALWAYS produced here (application logic). Any LLM layer
 may only verbalize these values, never change them.
@@ -21,7 +21,7 @@ REQUIRED_FIELDS = [
     "aspect_ratio",
     "footage_available",
     "footage_preselected",
-    "footage_volume",
+    "footage_hours",
     "scripting",
     "subtitles",
     "motion_level",
@@ -47,10 +47,10 @@ _PHONE_RE = re.compile(r"(?:\+62|62|0)8[\d\-\s]{7,13}\d")
 
 def redact_pii(text: str) -> dict:
     emails = len(_EMAIL_RE.findall(text))
-    redacted = _EMAIL_RE.sub("[email disensor]", text)
+    redacted = _EMAIL_RE.sub("[email redacted]", text)
 
     phones = len(_PHONE_RE.findall(redacted))
-    redacted = _PHONE_RE.sub("[nomor disensor]", redacted)
+    redacted = _PHONE_RE.sub("[phone redacted]", redacted)
 
     return {"text": redacted, "emails_found": emails, "phones_found": phones, "total": emails + phones}
 
@@ -72,11 +72,20 @@ def derive_buffers(scope: dict) -> list[dict]:
 
 
 def format_idr(amount: float) -> str:
-    return "Rp" + f"{int(round(amount)):,}".replace(",", ".")
+    return "IDR " + f"{int(round(amount)):,}"
 
 
-def format_idr_juta(amount: float) -> str:
-    return f"Rp{amount / 1_000_000:.1f} juta".replace(".", ",")
+def format_idr_compact(amount: float) -> str:
+    return f"IDR {amount / 1_000_000:.1f}M"
+
+
+def plural(value: int, singular: str, plural_label: Optional[str] = None) -> str:
+    return singular if int(value) == 1 else (plural_label or f"{singular}s")
+
+
+def revision_phrase(rounds: int, consolidated: bool = False) -> str:
+    prefix = "consolidated " if consolidated else ""
+    return f"{rounds} {prefix}revision {plural(rounds, 'round')}"
 
 
 # --------------------------------------------------------------------------
@@ -107,17 +116,17 @@ def build_options(scope: dict, cost_per_hour: float, target_margin: float, clien
     options.append({
         "id": "A",
         "type": "budget_fixed",
-        "title": "Budget tetap, scope dikurangi",
+        "title": "Keep budget, reduce scope",
         "price": int(round(client_budget)),
         "quantity": chosen_qty,
         "timeline_days": 10,
         "revision_rounds": 1,
         "footage_selection_included": False,
         "subtitles": True,
-        "exclusions": ["Scripting", "Motion graphics kustom", "Pemilihan footage", "Format tambahan"],
+        "exclusions": ["Scripting", "Custom motion graphics", "Footage selection", "Additional formats"],
         "price_floor_low": a_price_info["price_floor_low"],
         "price_floor_high": a_price_info["price_floor_high"],
-        "note": f"Harga dijaga di budget klien dengan {chosen_qty} video dan 1 putaran revisi.",
+        "note": f"Keeps the client budget by reducing to {chosen_qty} {plural(chosen_qty, 'video')} and {revision_phrase(1)}.",
     })
 
     # ---- Option B: keep scope, normal timeline, defensible price ----
@@ -132,17 +141,17 @@ def build_options(scope: dict, cost_per_hour: float, target_margin: float, clien
     options.append({
         "id": "B",
         "type": "scope_fixed_normal",
-        "title": "Scope tetap, timeline normal",
+        "title": "Keep scope, normal timeline",
         "price": b_price,
         "quantity": int(scope.get("quantity") or 0),
         "timeline_days": 21,
         "revision_rounds": b_scope["revision_rounds"],
         "footage_selection_included": True,
         "subtitles": True,
-        "exclusions": ["Perubahan konsep setelah storyboard disetujui", "Video tambahan", "Format aspect ratio tambahan"],
+        "exclusions": ["Concept changes after storyboard approval", "Additional videos", "Additional aspect-ratio formats"],
         "price_floor_low": b_info["price_floor_low"],
         "price_floor_high": b_info["price_floor_high"],
-        "note": f"Harga di dalam rentang price floor ({format_idr_juta(b_info['price_floor_low'])}–{format_idr_juta(b_info['price_floor_high'])}).",
+        "note": f"Price sits inside the explainable floor range ({format_idr_compact(b_info['price_floor_low'])} to {format_idr_compact(b_info['price_floor_high'])}).",
     })
 
     # ---- Option C: keep scope, rush premium ----
@@ -157,7 +166,7 @@ def build_options(scope: dict, cost_per_hour: float, target_margin: float, clien
     options.append({
         "id": "C",
         "type": "scope_fixed_rush",
-        "title": "Scope tetap, rush premium",
+        "title": "Keep scope, rush premium",
         "price": rush_price,
         "quantity": int(scope.get("quantity") or 0),
         "timeline_days": 7,
@@ -165,72 +174,70 @@ def build_options(scope: dict, cost_per_hour: float, target_margin: float, clien
         "footage_selection_included": True,
         "subtitles": True,
         "rush_premium": rush_premium,
-        "conditions": ["Feedback klien maksimal 12 jam", "Aset lengkap sebelum mulai", "Priority scheduling"],
-        "exclusions": ["Putaran revisi tambahan", "Perubahan konsep setelah approval"],
+        "conditions": ["Client feedback within 12 hours", "Complete assets before start", "Priority scheduling"],
+        "exclusions": ["Additional revision rounds", "Concept changes after approval"],
         "price_floor_low": c_info["price_floor_low"],
         "price_floor_high": c_info["price_floor_high"],
-        "note": f"Rush premium {format_idr(rush_premium)} karena timeline dipadatkan dan approval dipercepat.",
+        "note": f"Adds an {format_idr(rush_premium)} rush premium for compressed scheduling and faster approval.",
     })
 
     return options
 
 
 # --------------------------------------------------------------------------
-# Indonesian copy templates (deterministic; fully editable client-side)
+# English copy templates (deterministic; fully editable client-side)
 # --------------------------------------------------------------------------
 def _deliverable_line(opt: dict) -> str:
-    line = f"{opt['quantity']} video vertikal (maks 45 detik)"
+    line = f"{opt['quantity']} vertical videos (up to 45 seconds each)"
     if opt.get("subtitles"):
-        line += ", subtitle"
+        line += ", subtitles"
     if opt.get("footage_selection_included"):
-        line += ", termasuk pemilihan footage"
+        line += ", footage selection included"
     return line
 
 
 def whatsapp_message(scope: dict, options: list[dict], tone: str = "warm") -> str:
     a, b = options[0], options[1]
     opener = {
-        "warm": "Siap, Kak! Terima kasih briefnya.",
-        "firm": "Halo, Kak. Sudah saya breakdown briefnya.",
-        "formal": "Selamat siang. Terima kasih atas briefnya.",
-    }.get(tone, "Siap, Kak!")
+        "warm": "Thanks for the brief. I broke down the scope first.",
+        "firm": "I reviewed the brief and need to protect the scope before quoting.",
+        "formal": "Thank you for the brief. I have reviewed the scope and pricing assumptions.",
+    }.get(tone, "Thanks for the brief.")
 
     return (
-        f"{opener} Setelah saya breakdown, untuk {scope.get('quantity')} Reels ada beberapa hal "
-        f"yang perlu dipastikan dulu: durasi final, pemilihan footage, subtitle, jumlah approver, "
-        f"dan batas revisi.\n\n"
-        f"Dengan budget {format_idr(scope.get('client_budget'))}, opsi paling aman adalah "
-        f"{_deliverable_line(a)} dengan {a['revision_rounds']} putaran revisi "
-        f"({format_idr(a['price'])}, ± {a['timeline_days']} hari kerja setelah aset lengkap).\n\n"
-        f"Kalau tetap {b['quantity']} Reels termasuk pemilihan footage dan {b['revision_rounds']} putaran revisi, "
-        f"estimasinya {format_idr(b['price'])} dengan waktu ± 3 minggu setelah semua aset lengkap.\n\n"
-        f"Saya rangkum pilihannya di link ini supaya kita gampang pilih yang paling cocok ya, Kak. 🙏"
+        f"{opener} For {scope.get('quantity')} Reels, a few items still affect the quote: final duration, "
+        f"footage selection, subtitles, approvers, and revision limits.\n\n"
+        f"With an {format_idr(scope.get('client_budget'))} budget, the safest option is "
+        f"{_deliverable_line(a)} ({format_idr(a['price'])}, about {a['timeline_days']} working days "
+        f"after all assets are complete). It includes {revision_phrase(a['revision_rounds'])}.\n\n"
+        f"If you want to keep all {b['quantity']} Reels with footage selection and {revision_phrase(b['revision_rounds'])}, "
+        f"the estimate is {format_idr(b['price'])} over about 3 weeks after all assets are complete.\n\n"
+        f"I summarized the options in this link so we can choose the cleanest scope before production starts."
     )
 
 
 def decline_message(scope: dict, tone: str = "warm") -> str:
     return (
-        "Halo, Kak. Terima kasih banyak sudah mempercayakan project ini. "
-        "Setelah saya cek detailnya, untuk saat ini saya belum bisa ambil dengan scope dan timeline tersebut "
-        "supaya hasilnya tetap maksimal. Kalau nanti timeline atau scope-nya lebih fleksibel, "
-        "dengan senang hati saya bantu. Semoga project-nya lancar ya, Kak. 🙏"
+        "Thanks for trusting me with this project. After reviewing the scope and timeline, "
+        "I cannot take it on under the current terms while still protecting the quality of the work. "
+        "If the timeline or scope becomes more flexible, I would be happy to revisit it."
     )
 
 
 def clarification_whatsapp(questions: list[dict]) -> str:
-    lines = ["Halo, Kak! Sebelum saya kasih penawaran, boleh dibantu jawab beberapa hal ini ya:"]
+    lines = ["Before I quote, can you help answer these scope questions?"]
     for i, q in enumerate(questions, 1):
         lines.append(f"{i}. {q['question']}")
-    lines.append("\nBiar penawarannya pas dan nggak ada yang meleset. Makasih, Kak! 🙏")
+    lines.append("\nThat keeps the offer accurate and prevents scope drift later. Thank you.")
     return "\n".join(lines)
 
 
 # --------------------------------------------------------------------------
-# Seeded demo fixture — always works, no AI, computed by the real engine.
+# Seeded demo fixture. Always works, no AI, computed by the real engine.
 # --------------------------------------------------------------------------
 SEED_BRIEF = (
-    "Kak mau edit 12 reels buat campaign bulan depan. Footage nanti aku kirim. "
-    "Budget 3 juta ya, kalau bisa minggu depan selesai. Revisi sampai cocok."
+    "Hi, I need 12 Reels for next month's campaign. I will send the footage later. "
+    "Budget is IDR 3M, ideally finished next week. Revisions until it feels right."
 )
 
 SEED_COST_PROFILE = {
@@ -247,61 +254,61 @@ SEED_COST_PROFILE = {
 
 def _seed_fields() -> list[dict]:
     return [
-        {"name": "quantity", "label": "Jumlah video", "value": 12, "status": "stated",
-         "source_quote": "12 reels", "confidence": 0.99},
+        {"name": "quantity", "label": "Video count", "value": 12, "status": "stated",
+         "source_quote": "12 Reels", "confidence": 0.99},
         {"name": "platform", "label": "Platform", "value": "Reels", "status": "stated",
-         "source_quote": "12 reels", "confidence": 0.95},
-        {"name": "client_budget", "label": "Budget klien", "value": 3000000, "status": "stated",
-         "source_quote": "Budget 3 juta", "confidence": 0.98},
-        {"name": "deadline", "label": "Deadline", "value": "minggu depan (ambigu)", "status": "stated",
-         "source_quote": "minggu depan selesai", "confidence": 0.8},
-        {"name": "footage_available", "label": "Footage", "value": "klien mengirim", "status": "stated",
-         "source_quote": "Footage nanti aku kirim", "confidence": 0.9},
-        {"name": "revision_rounds", "label": "Putaran revisi", "value": "tidak dibatasi", "status": "stated",
-         "source_quote": "Revisi sampai cocok", "confidence": 0.9,
-         "inference_explanation": "\u201cRevisi sampai cocok\u201d menandakan revisi tidak dibatasi."},
+         "source_quote": "12 Reels", "confidence": 0.95},
+        {"name": "client_budget", "label": "Client budget", "value": 3000000, "status": "stated",
+         "source_quote": "Budget is IDR 3M", "confidence": 0.98},
+        {"name": "deadline", "label": "Deadline", "value": "next week (ambiguous)", "status": "stated",
+         "source_quote": "finished next week", "confidence": 0.8},
+        {"name": "footage_available", "label": "Footage", "value": "client will send it later", "status": "stated",
+         "source_quote": "I will send the footage later", "confidence": 0.9},
+        {"name": "revision_rounds", "label": "Revision rounds", "value": "unbounded", "status": "stated",
+         "source_quote": "Revisions until it feels right", "confidence": 0.9,
+         "inference_explanation": "\"Revisions until it feels right\" means revision exposure is not bounded."},
         {"name": "aspect_ratio", "label": "Aspect ratio", "value": "9:16", "status": "inferred",
          "source_quote": None, "confidence": 0.7,
-         "inference_explanation": "Reels umumnya 9:16 vertikal."},
+         "inference_explanation": "Reels usually use a vertical 9:16 format."},
         {"name": "motion_level", "label": "Motion graphics", "value": "basic", "status": "inferred",
          "source_quote": None, "confidence": 0.5,
-         "inference_explanation": "Tidak disebut, diasumsikan basic."},
-        {"name": "final_duration", "label": "Durasi final", "value": None, "status": "missing",
+         "inference_explanation": "Not stated, so the estimate assumes basic motion."},
+        {"name": "final_duration", "label": "Final duration", "value": None, "status": "missing",
          "source_quote": None, "confidence": 1.0},
-        {"name": "footage_preselected", "label": "Footage sudah dipilih?", "value": None, "status": "missing",
+        {"name": "footage_preselected", "label": "Footage already selected?", "value": None, "status": "missing",
          "source_quote": None, "confidence": 1.0},
-        {"name": "footage_volume", "label": "Volume footage", "value": None, "status": "missing",
+        {"name": "footage_hours", "label": "Footage volume", "value": None, "status": "missing",
          "source_quote": None, "confidence": 1.0},
         {"name": "scripting", "label": "Scripting", "value": None, "status": "missing",
          "source_quote": None, "confidence": 1.0},
-        {"name": "subtitles", "label": "Subtitle", "value": None, "status": "missing",
+        {"name": "subtitles", "label": "Subtitles", "value": None, "status": "missing",
          "source_quote": None, "confidence": 1.0},
-        {"name": "approver_count", "label": "Jumlah approver", "value": None, "status": "missing",
+        {"name": "approver_count", "label": "Approver count", "value": None, "status": "missing",
          "source_quote": None, "confidence": 1.0},
-        {"name": "feedback_method", "label": "Metode feedback", "value": None, "status": "missing",
+        {"name": "feedback_method", "label": "Feedback method", "value": None, "status": "missing",
          "source_quote": None, "confidence": 1.0},
-        {"name": "source_file_handover", "label": "Serah terima source file", "value": None, "status": "missing",
+        {"name": "source_file_handover", "label": "Source-file handover", "value": None, "status": "missing",
          "source_quote": None, "confidence": 1.0},
     ]
 
 
 def _seed_clarifications() -> list[dict]:
     return [
-        {"id": "q1", "question": "Berapa durasi final setiap video?",
-         "why": "Durasi final memengaruhi waktu editing dan subtitle.",
-         "impact": ["time", "cost"], "answer": "30\u201345 detik per video"},
-        {"id": "q2", "question": "Apakah footage sudah dipilih, atau editor harus memilah semua footage?",
-         "why": "Pemilihan footage bisa menambah jam kerja yang signifikan.",
-         "impact": ["time", "cost", "dependency"], "answer": "3 jam footage, belum dipilih"},
-        {"id": "q3", "question": "Apakah scripting termasuk? Bagaimana dengan subtitle?",
-         "why": "Scripting dan subtitle menambah scope pekerjaan.",
-         "impact": ["time", "acceptance"], "answer": "Scripting tidak termasuk, subtitle termasuk"},
-        {"id": "q4", "question": "Berapa orang yang memberi approval?",
-         "why": "Banyak approver menambah komunikasi dan revisi.",
-         "impact": ["time", "revision"], "answer": "2 orang"},
-        {"id": "q5", "question": "Apakah dua putaran revisi terkonsolidasi cukup?",
-         "why": "Batas revisi menentukan exposure waktu terbesar.",
-         "impact": ["revision", "cost"], "answer": "Ya, klien setuju 2 putaran terkonsolidasi"},
+        {"id": "q1", "question": "What is the final duration for each video?",
+         "why": "Final duration changes editing and subtitle time.",
+         "impact": ["time", "cost"], "answer": "30-45 seconds per video"},
+        {"id": "q2", "question": "Is the footage already selected, or should the editor review all raw footage?",
+         "why": "Footage selection can add significant working hours.",
+         "impact": ["time", "cost", "dependency"], "answer": "3 hours of raw footage, not selected"},
+        {"id": "q3", "question": "Is scripting included? What about subtitles?",
+         "why": "Scripting and subtitles change the work scope.",
+         "impact": ["time", "acceptance"], "answer": "Scripting is excluded, subtitles are included"},
+        {"id": "q4", "question": "How many people approve the work?",
+         "why": "More approvers add communication time and revision risk.",
+         "impact": ["time", "revision"], "answer": "2 approvers"},
+        {"id": "q5", "question": "Are two consolidated revision rounds enough?",
+         "why": "Revision limits define the largest time exposure.",
+         "impact": ["revision", "cost"], "answer": "Yes, the client accepts 2 consolidated rounds"},
     ]
 
 
@@ -330,11 +337,11 @@ def resolved_seed_scope() -> dict:
 def agreement_snapshot(opt: dict, project_title: str, client_name: Optional[str] = None, is_demo: bool = False) -> dict:
     """Build the client-facing immutable snapshot from a selected option. No internal cost data."""
     deliverables = [
-        f"{opt.get('quantity')} video vertikal (maks 45 detik, 9:16)",
-        "Subtitle" if opt.get("subtitles", True) else None,
-        "Pemilihan footage" if opt.get("footage_selection_included") else None,
-        f"{opt.get('revision_rounds')} putaran revisi terkonsolidasi",
-        "1 file final 1080x1920 per video",
+        f"{opt.get('quantity')} vertical videos (up to 45 seconds, 9:16)",
+        "Subtitles" if opt.get("subtitles", True) else None,
+        "Footage selection" if opt.get("footage_selection_included") else None,
+        revision_phrase(opt.get("revision_rounds"), consolidated=True),
+        "1 final 1080x1920 file per video",
     ]
     return {
         "project_title": project_title,
@@ -357,23 +364,22 @@ def agreement_snapshot(opt: dict, project_title: str, client_name: Optional[str]
 def scope_change_message(classification: str, delta_result: Optional[dict] = None,
                          clarification: Optional[str] = None) -> str:
     if classification == "included":
-        return ("Halo, Kak! Terima kasih. Permintaan ini masih termasuk dalam scope yang kita sepakati, "
-                "jadi bisa saya kerjakan tanpa biaya tambahan. Saya lanjutkan ya. 🙏")
+        return ("Thanks. This request is still inside the approved scope, "
+                "so I can handle it without an additional fee. I will continue.")
     if classification == "revision":
-        return ("Siap, Kak. Ini masuk sebagai revisi dalam putaran yang sudah disepakati. "
-                "Saya kerjakan sesuai catatan feedback ya. 🙏")
+        return ("This fits as a revision within the agreed revision allowance. "
+                "I will work from the consolidated feedback notes.")
     if classification == "new_scope":
         extra = ""
         if delta_result:
-            extra = (f" Karena ini menambah scope, ada tambahan sekitar "
-                     f"{format_idr(delta_result['price_delta_low'])}–{format_idr(delta_result['price_delta_high'])} "
-                     f"dan ± {delta_result['hours_delta_low']:.0f}–{delta_result['hours_delta_high']:.0f} jam kerja.")
-        return ("Halo, Kak! Dengan senang hati saya bantu. Permintaan ini di luar scope yang kita sepakati "
-                f"sebelumnya, jadi ini menggeser baseline awal.{extra} Boleh saya kirim penyesuaiannya dulu "
-                "sebelum lanjut ya? 🙏")
+            extra = (f" It adds about "
+                     f"{format_idr(delta_result['price_delta_low'])} to {format_idr(delta_result['price_delta_high'])} "
+                     f"and {delta_result['hours_delta_low']:.0f}-{delta_result['hours_delta_high']:.0f} working hours.")
+        return ("I can help with this, but it sits outside the approved scope "
+                f"and changes the original baseline.{extra} I will send the adjustment first before continuing.")
     # unclear
-    q = clarification or "Boleh dijelaskan sedikit lebih detail maksud permintaannya?"
-    return f"Halo, Kak! Supaya saya bisa pastikan ini masuk scope atau tidak: {q}"
+    q = clarification or "Can you clarify the request a little more?"
+    return f"To confirm whether this is inside the approved scope: {q}"
 
 
 def compute_seed_analysis() -> dict:
@@ -409,6 +415,7 @@ def compute_seed_analysis() -> dict:
         "clarifications": _seed_clarifications(),
         "estimate": est,
         "price": price,
+        "scope_used": scope,
         "scope_completeness": completeness,
         "risk": risk,
         "confidence": conf,

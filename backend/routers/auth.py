@@ -25,7 +25,7 @@ def _set_jwt_cookies(response: Response, user_id: str, email: str):
 async def register(body: RegisterBody, response: Response):
     email = body.email.lower()
     if await db.users.find_one({"email": email}):
-        raise HTTPException(status_code=400, detail="Email sudah terdaftar")
+        raise HTTPException(status_code=400, detail="Email is already registered")
     user_id = f"user_{uuid.uuid4().hex[:12]}"
     name = body.name or email.split("@")[0]
     await db.users.insert_one({
@@ -42,7 +42,7 @@ async def login(body: LoginBody, response: Response):
     email = body.email.lower()
     user = await db.users.find_one({"email": email})
     if not user or not user.get("password_hash") or not auth_mod.verify_password(body.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Email atau password salah")
+        raise HTTPException(status_code=401, detail="Email or password is incorrect")
     _set_jwt_cookies(response, user["user_id"], email)
     return clean(user)
 

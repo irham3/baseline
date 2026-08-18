@@ -1,2 +1,2 @@
 export const SEED_BRIEF =
-  "Kak mau edit 12 reels buat campaign bulan depan. Footage nanti aku kirim. Budget 3 juta ya, kalau bisa minggu depan selesai. Revisi sampai cocok.";
+  "Hi, I need 12 Reels for next month's campaign. I will send the footage later. Budget is IDR 3M, ideally finished next week. Revisions until it feels right.";

@@ -19,7 +19,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    // CRITICAL: if returning from OAuth callback, skip /me — AuthCallback establishes
+    // If returning from OAuth callback, skip /me. AuthCallback establishes
     // the session first, then this runs.
     if (window.location.hash?.includes("session_id=")) {
       setLoading(false);

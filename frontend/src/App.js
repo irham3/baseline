@@ -36,7 +36,7 @@ function AuthCallback() {
         window.history.replaceState(null, "", "/app");
         navigate("/app", { replace: true });
       } catch (e) {
-        setError("Login Google gagal. Silakan coba lagi.");
+        setError("Google sign-in failed. Please try again.");
       }
     })();
   }, [location, navigate, checkAuth]);
@@ -47,13 +47,13 @@ function AuthCallback() {
         <>
           <p className="text-danger font-semibold" data-testid="oauth-error">{error}</p>
           <button className="btn-secondary btn-md" onClick={() => navigate("/login")}>
-            Kembali ke login
+            Back to sign in
           </button>
         </>
       ) : (
         <>
           <Spinner size={26} />
-          <p className="text-ink-soft">Menyelesaikan login…</p>
+          <p className="text-ink-soft">Finishing sign-in...</p>
         </>
       )}
     </div>

@@ -1,4 +1,4 @@
-"""Baseline API entrypoint — assembles routers, CORS, health, analytics, startup."""
+"""Baseline API entrypoint: assembles routers, CORS, health, analytics, startup."""
 from __future__ import annotations
 
 from dotenv import load_dotenv

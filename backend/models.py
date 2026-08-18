@@ -68,7 +68,7 @@ class AgreementResponseBody(BaseModel):
 
 class DemoAgreementBody(BaseModel):
     option_id: str = "B"
-    project_title: str = "Campaign 12 Reels — Baseline (demo)"
+    project_title: str = "Campaign 12 Reels - Baseline (demo)"
 
 
 class ProjectBody(BaseModel):
@@ -83,4 +83,4 @@ class ProjectBody(BaseModel):
 
 class AnalyticsBody(BaseModel):
     event: str
-    props: dict = {}
+    props: dict = Field(default_factory=dict)

@@ -44,7 +44,7 @@ export default function Login() {
       setUser(data);
       navigate("/app");
     } catch (e) {
-      setError(apiErrorMessage(e.response?.data?.detail) || "Gagal masuk.");
+      setError(apiErrorMessage(e.response?.data?.detail) || "Sign-in failed.");
     } finally {
       setLoading(false);
     }
@@ -54,35 +54,44 @@ export default function Login() {
     <Shell>
       <div className="wrap flex min-h-[70vh] items-center justify-center py-10">
         <div className="w-full max-w-md">
-          <h1 className="text-center text-2xl font-extrabold tracking-tight text-ink">Save your workflow</h1>
-          <p className="mt-1 text-center text-ink-soft">Guest demo & Judge Mode tetap bebas login. Masuk hanya untuk menyimpan cost profile, analisis, dan kalibrasi.</p>
+          <h1 className="text-center text-2xl font-extrabold text-ink">Save your workflow</h1>
+          <p className="mt-1 text-center text-ink-soft">Guest demo and Judge Mode stay open. Sign in only to save cost profiles, analyses, and calibration.</p>
 
           <div className="card mt-6 p-6">
-            <button onClick={googleLogin} className="btn-secondary btn-lg w-full" data-testid="google-login">
-              <GoogleMark /> Lanjut dengan Google
+            <button type="button" onClick={googleLogin} className="btn-secondary btn-lg w-full" data-testid="google-login">
+              <GoogleMark /> Continue with Google
             </button>
 
             <div className="my-5 flex items-center gap-3 text-xs text-ink-faint">
-              <div className="h-px flex-1 bg-line" /> atau email <div className="h-px flex-1 bg-line" />
+              <div className="h-px flex-1 bg-line" /> or email <div className="h-px flex-1 bg-line" />
             </div>
 
             <div className="mb-4 flex rounded-full border border-line bg-raised p-0.5">
               {["login", "register"].map((m) => (
-                <button key={m} onClick={() => { setMode(m); setError(null); }} className={`flex-1 rounded-full py-1.5 text-sm font-semibold transition-colors ${mode === m ? "bg-green text-white" : "text-ink-soft"}`} data-testid={`tab-${m}`}>
-                  {m === "login" ? "Masuk" : "Daftar"}
+                <button type="button" key={m} onClick={() => { setMode(m); setError(null); }} className={`flex-1 rounded-full py-1.5 text-sm font-semibold transition-colors ${mode === m ? "bg-green text-white" : "text-ink-soft"}`} data-testid={`tab-${m}`}>
+                  {m === "login" ? "Sign in" : "Create account"}
                 </button>
               ))}
             </div>
 
             <form onSubmit={submit} className="space-y-3">
               {mode === "register" && (
-                <input className="input" placeholder="Nama" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="login-name" />
+                <label className="block">
+                  <span className="field-label">Name</span>
+                  <input name="name" className="input" autoComplete="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="login-name" />
+                </label>
               )}
-              <input type="email" required className="input" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="login-email" />
-              <input type="password" required minLength={6} className="input" placeholder="Password (min. 6 karakter)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} data-testid="login-password" />
+              <label className="block">
+                <span className="field-label">Email</span>
+                <input type="email" name="email" required className="input" autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="login-email" />
+              </label>
+              <label className="block">
+                <span className="field-label">Password</span>
+                <input type="password" name="password" required minLength={6} className="input" autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="Minimum 6 characters" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} data-testid="login-password" />
+              </label>
               {error && <p className="text-[13px] font-semibold text-danger" data-testid="login-error">{error}</p>}
               <button type="submit" disabled={loading} className="btn-primary btn-lg w-full" data-testid="login-submit">
-                {loading ? <Spinner size={18} /> : <><LogIn size={18} /> {mode === "login" ? "Masuk" : "Buat akun"}</>}
+                {loading ? <Spinner size={18} /> : <><LogIn size={18} /> {mode === "login" ? "Sign in" : "Create account"}</>}
               </button>
             </form>
           </div>

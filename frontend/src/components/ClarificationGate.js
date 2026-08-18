@@ -4,9 +4,9 @@ import { Spinner } from "@/components/ui/primitives";
 import { useClipboard } from "@/components/WhatsAppPreview";
 
 const IMPACT_LABEL = {
-  time: "Waktu",
-  cost: "Biaya",
-  revision: "Revisi",
+  time: "Time",
+  cost: "Cost",
+  revision: "Revision",
   dependency: "Dependency",
   acceptance: "Acceptance",
 };
@@ -18,6 +18,7 @@ function Toggle({ label, value, onChange, testid }) {
       <button
         role="switch"
         aria-checked={!!value}
+        aria-label={label}
         onClick={() => onChange(!value)}
         className={`relative h-6 w-11 rounded-full transition-colors ${value ? "bg-green" : "bg-black/15"}`}
         data-testid={testid}
@@ -37,6 +38,7 @@ function NumberInput({ label, value, onChange, suffix, testid, min = 0 }) {
       <div className="relative">
         <input
           type="number"
+          name={testid}
           className="input"
           value={value ?? ""}
           min={min}
@@ -54,9 +56,9 @@ export default function ClarificationGate({ overrides, setOverrides, questions, 
   const set = (k, v) => setOverrides((o) => ({ ...o, [k]: v }));
 
   const copyQuestions = () => {
-    const lines = ["Halo, Kak! Sebelum saya kasih penawaran, boleh dibantu jawab ini ya:"];
+    const lines = ["Before I quote, can you help answer these scope questions?"];
     questions.forEach((q, i) => lines.push(`${i + 1}. ${q.question}`));
-    lines.push("\nBiar penawarannya pas. Makasih, Kak! 🙏");
+    lines.push("\nThat keeps the offer accurate and prevents scope drift later. Thank you.");
     copy(lines.join("\n"));
   };
 
@@ -70,7 +72,7 @@ export default function ClarificationGate({ overrides, setOverrides, questions, 
               Ask this before you quote
             </h4>
             <button onClick={copyQuestions} className="btn-secondary btn-sm" data-testid="copy-questions">
-              {state === "ok" ? <><Check size={14} /> Tersalin</> : <><Copy size={14} /> Salin ke WhatsApp</>}
+              {state === "ok" ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy questions</>}
             </button>
           </div>
           <ol className="space-y-3">
@@ -78,7 +80,7 @@ export default function ClarificationGate({ overrides, setOverrides, questions, 
               <li key={q.id || i} className="border-l-2 border-amber/40 pl-3" data-testid={`question-${i}`}>
                 <p className="text-sm font-semibold text-ink">{i + 1}. {q.question}</p>
                 <p className="mt-0.5 text-[13px] text-ink-soft">
-                  <span className="font-semibold text-amber">Mengapa ini memengaruhi harga: </span>
+                  <span className="font-semibold text-amber">Why this affects price: </span>
                   {q.why}
                 </p>
                 {q.impact?.length > 0 && (
@@ -95,38 +97,39 @@ export default function ClarificationGate({ overrides, setOverrides, questions, 
       )}
 
       <div className="card p-5">
-        <h4 className="mb-1 font-bold text-ink">Jawaban &amp; asumsi</h4>
+        <h4 className="mb-1 font-bold text-ink">Answers &amp; assumptions</h4>
         <p className="mb-4 text-[13px] text-ink-faint">
-          Isi yang kamu tahu. Yang belum jelas dibiarkan sebagai asumsi — range akan melebar.
+          Fill what you know. Unknown fields can stay as assumptions, but the range will widen.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
-          <NumberInput label="Jumlah video" value={overrides.quantity} onChange={(v) => set("quantity", v)} testid="ov-quantity" min={1} />
-          <NumberInput label="Budget klien" value={overrides.client_budget} onChange={(v) => set("client_budget", v)} suffix="Rp" testid="ov-budget" />
-          <NumberInput label="Durasi final / video" value={overrides.final_duration} onChange={(v) => set("final_duration", v)} suffix="detik" testid="ov-duration" />
-          <NumberInput label="Deadline (hari kerja)" value={overrides.deadline_working_days} onChange={(v) => set("deadline_working_days", v)} suffix="hari" testid="ov-deadline" />
-          <NumberInput label="Jumlah approver" value={overrides.approver_count} onChange={(v) => set("approver_count", v)} suffix="orang" testid="ov-approvers" min={1} />
+          <NumberInput label="Video count" value={overrides.quantity} onChange={(v) => set("quantity", v)} testid="ov-quantity" min={1} />
+          <NumberInput label="Client budget" value={overrides.client_budget} onChange={(v) => set("client_budget", v)} suffix="IDR" testid="ov-budget" />
+          <NumberInput label="Final duration / video" value={overrides.final_duration} onChange={(v) => set("final_duration", v)} suffix="sec" testid="ov-duration" />
+          <NumberInput label="Deadline (working days)" value={overrides.deadline_working_days} onChange={(v) => set("deadline_working_days", v)} suffix="days" testid="ov-deadline" />
+          <NumberInput label="Approver count" value={overrides.approver_count} onChange={(v) => set("approver_count", v)} suffix="people" testid="ov-approvers" min={1} />
           <label className="block">
-            <span className="field-label">Putaran revisi</span>
+            <span className="field-label">Revision rounds</span>
             <select
+              name="ov-revisions"
               className="input"
               value={overrides.revision_rounds === null ? "unlimited" : overrides.revision_rounds ?? ""}
               onChange={(e) => set("revision_rounds", e.target.value === "unlimited" ? null : Number(e.target.value))}
               data-testid="ov-revisions"
             >
-              <option value="1">1 putaran</option>
-              <option value="2">2 putaran</option>
-              <option value="3">3 putaran</option>
-              <option value="unlimited">Tidak dibatasi</option>
+              <option value="1">1 round</option>
+              <option value="2">2 rounds</option>
+              <option value="3">3 rounds</option>
+              <option value="unlimited">Unbounded</option>
             </select>
           </label>
           {!overrides.footage_preselected && (
-            <NumberInput label="Volume footage mentah" value={overrides.footage_hours} onChange={(v) => set("footage_hours", v)} suffix="jam" testid="ov-footage-hours" />
+            <NumberInput label="Raw footage volume" value={overrides.footage_hours} onChange={(v) => set("footage_hours", v)} suffix="hours" testid="ov-footage-hours" />
           )}
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <Toggle label="Footage sudah dipilih" value={overrides.footage_preselected} onChange={(v) => set("footage_preselected", v)} testid="ov-footage-preselected" />
-          <Toggle label="Subtitle termasuk" value={overrides.subtitles} onChange={(v) => set("subtitles", v)} testid="ov-subtitles" />
-          <Toggle label="Scripting termasuk" value={overrides.scripting} onChange={(v) => set("scripting", v)} testid="ov-scripting" />
+          <Toggle label="Footage already selected" value={overrides.footage_preselected} onChange={(v) => set("footage_preselected", v)} testid="ov-footage-preselected" />
+          <Toggle label="Subtitles included" value={overrides.subtitles} onChange={(v) => set("subtitles", v)} testid="ov-subtitles" />
+          <Toggle label="Scripting included" value={overrides.scripting} onChange={(v) => set("scripting", v)} testid="ov-scripting" />
         </div>
 
         <button
@@ -135,7 +138,7 @@ export default function ClarificationGate({ overrides, setOverrides, questions, 
           className="btn-primary btn-md mt-4 w-full sm:w-auto"
           data-testid="recalc-btn"
         >
-          {recalculating ? <><Spinner size={16} /> Menghitung…</> : <><Calculator size={16} /> Hitung estimasi</>}
+          {recalculating ? <><Spinner size={16} /> Calculating...</> : <><Calculator size={16} /> Calculate estimate</>}
         </button>
       </div>
     </div>
