@@ -306,6 +306,25 @@ def _seed_clarifications() -> list[dict]:
 
 
 def resolved_seed_scope() -> dict:
+    return {
+        "quantity": 12,
+        "final_duration": 45,
+        "aspect_ratio": "9:16",
+        "footage_available": True,
+        "footage_preselected": False,
+        "footage_hours": 3,
+        "scripting": False,
+        "subtitles": True,
+        "audio_cleanup": True,
+        "color_correction": True,
+        "motion_level": "basic",
+        "approver_count": 2,
+        "revision_rounds": 2,
+        "deadline_working_days": 5,
+        "client_budget": 3000000,
+        "unresolved_major_count": 2,
+        "rush": False,
+    }
 
 
 def agreement_snapshot(opt: dict, project_title: str, client_name: Optional[str] = None, is_demo: bool = False) -> dict:
@@ -355,26 +374,6 @@ def scope_change_message(classification: str, delta_result: Optional[dict] = Non
     # unclear
     q = clarification or "Boleh dijelaskan sedikit lebih detail maksud permintaannya?"
     return f"Halo, Kak! Supaya saya bisa pastikan ini masuk scope atau tidak: {q}"
-
-    return {
-        "quantity": 12,
-        "final_duration": 45,
-        "aspect_ratio": "9:16",
-        "footage_available": True,
-        "footage_preselected": False,
-        "footage_hours": 3,
-        "scripting": False,
-        "subtitles": True,
-        "audio_cleanup": True,
-        "color_correction": True,
-        "motion_level": "basic",
-        "approver_count": 2,
-        "revision_rounds": 2,
-        "deadline_working_days": 5,
-        "client_budget": 3000000,
-        "unresolved_major_count": 2,
-        "rush": False,
-    }
 
 
 def compute_seed_analysis() -> dict:
