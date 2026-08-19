@@ -17,7 +17,16 @@ import {
 } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { client } from "@/lib/api";
-import { idr, idrCompact } from "@/lib/format";
+
+function idr(n) {
+  if (n == null || isNaN(n)) return "-";
+  return "IDR " + Math.round(n).toLocaleString("en-US");
+}
+
+function idrCompact(n) {
+  if (n == null || isNaN(n)) return "-";
+  return "IDR " + (n / 1_000_000).toFixed(1) + "M";
+}
 
 // --- RETRO GRID BACKGROUND ---
 function RetroGrid() {
