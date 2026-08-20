@@ -28,6 +28,28 @@ def _seed_analysis_id(headers):
     return r.json()["analysis_id"]
 
 
+def test_estimate_with_unviable_budget_returns_200_not_500():
+    # Regression: a client_budget too low for even one video used to crash the
+    # /estimate endpoint with a 500 (TypeError in whatsapp_message on a None price).
+    headers = _guest_headers()
+    aid = _seed_analysis_id(headers)
+    body = {
+        "cost_profile": {"mode": "guided", "target_take_home": 8000000, "monthly_overhead": 1500000,
+                         "monthly_reserve": 900000, "total_working_hours": 160, "billable_utilization": 0.65,
+                         "target_margin": 0.2},
+        "scope_overrides": {"quantity": 10, "final_duration": 60, "client_budget": 200000,
+                            "deadline_working_days": 3, "revision_rounds": 3},
+    }
+    r = client.post(f"/api/analysis/{aid}/estimate", json=body, headers=headers)
+    assert r.status_code == 200, r.text
+    data = r.json()
+    a = next(o for o in data["options"] if o["id"] == "A")
+    assert a["type"] == "no_viable_scope"
+    assert a["price"] is None
+    assert data["whatsapp"] is not None
+    assert "None" not in data["whatsapp"]["warm"]
+
+
 def test_negative_quantity_returns_422_not_500():
     headers = _guest_headers()
     aid = _seed_analysis_id(headers)

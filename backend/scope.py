@@ -315,6 +315,21 @@ def whatsapp_message(scope: dict, options: list[dict], tone: str = "warm") -> st
         "formal": "Thank you for the brief. I have reviewed the scope and pricing assumptions.",
     }.get(tone, "Thanks for the brief.")
 
+    if a.get("price") is None:
+        # Option A is "no viable scope at this budget" -- do not describe a fabricated
+        # safest option; be direct about the gap and point to what a full-scope quote
+        # would actually cost instead.
+        return (
+            f"{opener} For {scope.get('quantity')} Reels, a few items still affect the quote: final duration, "
+            f"footage selection, subtitles, approvers, and revision limits.\n\n"
+            f"With an {format_idr(scope.get('client_budget'))} budget, I can't fit a viable scope right now -- "
+            f"even a single video's price floor is above that budget. To move forward I'd need either a "
+            f"revised budget or a different scope than what's described.\n\n"
+            f"For reference, keeping all {b['quantity']} Reels with footage selection and {revision_phrase(b['revision_rounds'])} "
+            f"would be {format_idr(b['price'])}, about {b['timeline_days']} working days after all assets are complete.\n\n"
+            f"Let me know if either direction works, or if the budget can move."
+        )
+
     return (
         f"{opener} For {scope.get('quantity')} Reels, a few items still affect the quote: final duration, "
         f"footage selection, subtitles, approvers, and revision limits.\n\n"

@@ -193,6 +193,17 @@ def test_no_viable_scope_when_budget_too_low_for_even_one_video():
     assert by_id["A"]["price_floor_low"] > 100000
 
 
+def test_whatsapp_message_does_not_crash_when_option_a_has_no_price():
+    # Regression: whatsapp_message() used to unconditionally format options[0]["price"],
+    # which crashed with TypeError once Option A became "no_viable_scope" (price=None).
+    scope = scope_mod.resolved_seed_scope()
+    opts = scope_mod.build_options(scope, 100000, 0.20, client_budget=100000)
+    for tone in ("warm", "firm", "formal"):
+        msg = scope_mod.whatsapp_message(scope, opts, tone)
+        assert isinstance(msg, str) and len(msg) > 0
+        assert "None" not in msg
+
+
 def test_budget_fixed_option_only_appears_when_actually_viable():
     scope = scope_mod.resolved_seed_scope()
     opts = scope_mod.build_options(scope, 100000, 0.20, client_budget=3000000)

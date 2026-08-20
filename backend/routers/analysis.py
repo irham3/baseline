@@ -240,6 +240,8 @@ async def deal_copy(analysis_id: str, body: DealCopyBody, request: Request):
     if len(opts) < 2:
         raise HTTPException(status_code=422, detail="At least two options are required for deal copy.")
     a, b = opts[0], opts[1]
+    if a.get("price") is None or b.get("price") is None:
+        raise HTTPException(status_code=422, detail="Both options must have a price to draft deal copy.")
     price_tokens = [scope_mod.format_idr(a["price"]), scope_mod.format_idr(b["price"])]
     params = {
         "quantity": scope.get("quantity"),
