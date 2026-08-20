@@ -48,8 +48,8 @@ export default function BriefMap({ fields }) {
                       <span className="text-sm text-ink-soft text-right">{valueText(f)}</span>
                     </div>
                     {f.status === "stated" && f.source_quote && (
-                      <p className="mt-1 flex items-start gap-1.5 rounded-lg bg-green-soft/60 px-2 py-1.5 text-[13px] italic text-green-strong">
-                        <Quote size={12} className="mt-0.5 shrink-0" />
+                      <p className="mt-1 flex items-start gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 text-[12px] italic text-emerald-300">
+                        <Quote size={11} className="mt-0.5 shrink-0 opacity-80" />
                         <span>"{f.source_quote}"</span>
                       </p>
                     )}

@@ -20,6 +20,12 @@ class GoogleSessionBody(BaseModel):
     session_id: str
 
 
+class GoogleAuthBody(BaseModel):
+    credential: Optional[str] = None
+    session_id: Optional[str] = None
+    access_token: Optional[str] = None
+
+
 class AnalyzeBody(BaseModel):
     brief: str
     redact: bool = False

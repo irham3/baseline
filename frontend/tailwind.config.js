@@ -11,6 +11,7 @@ module.exports = {
         "ink-soft": "rgb(var(--ink-soft-rgb) / <alpha-value>)",
         "ink-faint": "rgb(var(--ink-faint-rgb) / <alpha-value>)",
         line: "rgb(var(--line-rgb) / <alpha-value>)",
+        "line-subtle": "rgb(var(--line-subtle-rgb, 233 239 231) / <alpha-value>)",
         green: {
           DEFAULT: "rgb(var(--green-rgb) / <alpha-value>)",
           strong: "rgb(var(--green-strong-rgb) / <alpha-value>)",

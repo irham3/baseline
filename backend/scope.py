@@ -239,6 +239,11 @@ SEED_BRIEF = (
     "Hi, I need 12 Reels for next month's campaign. I will send the footage later. "
     "Budget is IDR 3M, ideally finished next week. Revisions until it feels right."
 )
+SEED_BRIEF_ID = (
+    "Halo bro, mau minta tolong editin 12 Reels buat campaign bulan depan ya. Budget kita 3jt. "
+    "Raw footage nyusul, minta tolong dibagusin sound design sama revisi sampai cocok ya."
+)
+SEED_BRIEFS = {SEED_BRIEF.strip(), SEED_BRIEF_ID.strip()}
 
 SEED_COST_PROFILE = {
     "mode": "guided",

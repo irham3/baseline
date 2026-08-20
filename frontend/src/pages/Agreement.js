@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import { CheckCircle2, Clock, Film, RefreshCw, CalendarClock, TriangleAlert, MessageSquare } from "lucide-react";
 import { Logo } from "@/components/Shell";
+import { SEO } from "@/components/SEO";
 import { Spinner, Badge } from "@/components/ui/primitives";
 import { client, apiErrorMessage, track } from "@/lib/api";
 import { idr, revisionPhrase } from "@/lib/format";
@@ -81,6 +82,12 @@ export default function Agreement() {
 
   return (
     <div className="min-h-screen bg-page">
+      <SEO
+        title={`Scope Agreement: ${s.project_title || "Deal Summary"}`}
+        description="Pre-deal scope agreement sheet detailing offer price, deliverables, revision terms, and timeline."
+        canonical={`/agreement/${token}`}
+        noIndex={true}
+      />
       <header className="border-b border-line/80 bg-page/85 backdrop-blur">
         <div className="wrap-narrow flex h-16 items-center justify-between">
           <Logo />

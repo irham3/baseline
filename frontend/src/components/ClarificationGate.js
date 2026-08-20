@@ -86,7 +86,7 @@ export default function ClarificationGate({ overrides, setOverrides, questions, 
                 {q.impact?.length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-1">
                     {q.impact.map((im) => (
-                      <span key={im} className="chip bg-amber-soft text-amber">{IMPACT_LABEL[im] || im}</span>
+                      <span key={im} className="chip bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[11px] px-2 py-0.5">{IMPACT_LABEL[im] || im}</span>
                     ))}
                   </div>
                 )}

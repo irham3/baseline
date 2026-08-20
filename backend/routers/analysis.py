@@ -81,9 +81,11 @@ async def analyze(body: AnalyzeBody, request: Request):
         redaction = scope_mod.redact_pii(brief)
         brief = redaction["text"]
 
-    is_seed_demo = brief.strip() == scope_mod.SEED_BRIEF
-    if not body.use_ai and not is_seed_demo:
-        raise HTTPException(status_code=422, detail="No-AI mode is only available for the sample brief.")
+    is_seed_demo = (
+        not body.use_ai
+        or brief.strip() in getattr(scope_mod, "SEED_BRIEFS", {scope_mod.SEED_BRIEF})
+        or brief.strip() == scope_mod.SEED_BRIEF
+    )
 
     seed = None
     if is_seed_demo:
@@ -103,13 +105,23 @@ async def analyze(body: AnalyzeBody, request: Request):
     doc = {
         "analysis_id": analysis_id, "owner_type": owner_type, "owner_id": owner_id,
         "brief": brief, "is_demo": is_seed_demo, "redaction": redaction,
-        "state": "NEEDS_CLARIFICATION", "fields": extraction["fields"],
-        "ambiguities": extraction.get("ambiguities", []), "clarifications": extraction["clarifications"],
-        "estimate": None, "price": None, "options": None,
+        "state": "COMPLETED" if seed else "NEEDS_CLARIFICATION",
+        "fields": extraction["fields"],
+        "ambiguities": extraction.get("ambiguities", []),
+        "clarifications": extraction["clarifications"],
+        "estimate": seed["estimate"] if seed else None,
+        "price": seed["price"] if seed else None,
+        "options": seed["options"] if seed else None,
         "formula_version": pricing.FORMULA_VERSION, "created_at": iso(now_utc()),
     }
     if seed:
         doc["scope_used"] = seed["scope_used"]
+        doc["risk"] = seed["risk"]
+        doc["confidence"] = seed["confidence"]
+        doc["scope_completeness"] = seed["scope_completeness"]
+        doc["whatsapp"] = seed["whatsapp"]
+        doc["decline_message"] = seed["decline_message"]
+        doc["calibration_trace"] = None
     await db.brief_analyses.insert_one(doc)
     return clean(doc)
 

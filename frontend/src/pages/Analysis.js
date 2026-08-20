@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { TriangleAlert, Link2, ExternalLink, Copy, Check, ArrowLeft } from "lucide-react";
 import { Shell } from "@/components/Shell";
+import { SEO } from "@/components/SEO";
 import { Spinner, Badge, Toast } from "@/components/ui/primitives";
 import BriefMap from "@/components/BriefMap";
 import ClarificationGate from "@/components/ClarificationGate";
@@ -77,6 +78,9 @@ export default function Analysis() {
       .then((r) => {
         setAnalysis(r.data);
         setOverrides(r.data.scope_used || overridesFromFields(r.data.fields || []));
+        if (r.data.estimate) {
+          setResult(r.data);
+        }
       })
       .catch((e) => setLoadErr(apiErrorMessage(e.response?.data?.detail) || "Failed to load analysis."));
   }, [id]);
@@ -161,6 +165,12 @@ export default function Analysis() {
 
   return (
     <Shell>
+      <SEO
+        title="Brief Map & Scope Analysis"
+        description="Detailed scope map, hidden parameters, price floor calculation, and deal options for the analyzed client brief."
+        canonical={`/analysis/${id}`}
+        noIndex={true}
+      />
       <div className="wrap py-8">
         <button onClick={() => navigate("/analyze")} className="btn-ghost btn-sm mb-3" data-testid="analysis-back">
           <ArrowLeft size={14} /> New analysis

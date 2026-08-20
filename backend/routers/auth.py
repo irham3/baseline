@@ -1,6 +1,7 @@
-"""Auth routes: JWT email/password + Emergent Google session."""
+"""Auth routes: JWT email/password + Direct Google Sign-In + Emergent Google session."""
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import timedelta
 
@@ -9,7 +10,7 @@ from fastapi import APIRouter, Request, Response, HTTPException, Depends
 
 import auth as auth_mod
 from core import db, now_utc, iso, clean, COOKIE_KW, GOOGLE_SESSION_URL, require_user
-from models import RegisterBody, LoginBody, GoogleSessionBody
+from models import RegisterBody, LoginBody, GoogleSessionBody, GoogleAuthBody
 
 router = APIRouter(prefix="/api/auth")
 
@@ -76,29 +77,93 @@ async def me(user: dict = Depends(require_user)):
     return user
 
 
-@router.post("/google/session")
-async def google_session(body: GoogleSessionBody, response: Response):
-    async with httpx.AsyncClient(timeout=15) as hc:
-        r = await hc.get(GOOGLE_SESSION_URL, headers={"X-Session-ID": body.session_id})
-    if r.status_code != 200:
-        raise HTTPException(status_code=401, detail="Google session invalid")
-    data = r.json()
-    email = data["email"].lower()
+@router.post("/google")
+async def google_auth(body: GoogleAuthBody, response: Response):
+    user_info = None
+
+    # 1. Direct Google ID Token (Google Identity Services)
+    if body.credential:
+        async with httpx.AsyncClient(timeout=15) as hc:
+            r = await hc.get("https://oauth2.googleapis.com/tokeninfo", params={"id_token": body.credential})
+        if r.status_code != 200:
+            raise HTTPException(status_code=401, detail="Invalid Google ID token")
+        data = r.json()
+
+        # Check email verification
+        if str(data.get("email_verified", "")).lower() not in ("true", "1"):
+            raise HTTPException(status_code=401, detail="Google email is not verified")
+
+        user_info = {
+            "email": data["email"].lower(),
+            "name": data.get("name") or data.get("given_name") or data["email"].split("@")[0],
+            "picture": data.get("picture"),
+        }
+
+    # 2. Google OAuth Access Token
+    elif body.access_token:
+        async with httpx.AsyncClient(timeout=15) as hc:
+            r = await hc.get("https://www.googleapis.com/oauth2/v3/userinfo", headers={"Authorization": f"Bearer {body.access_token}"})
+        if r.status_code != 200:
+            raise HTTPException(status_code=401, detail="Invalid Google access token")
+        data = r.json()
+        user_info = {
+            "email": data["email"].lower(),
+            "name": data.get("name") or data["email"].split("@")[0],
+            "picture": data.get("picture"),
+        }
+
+    # 3. Emergent Session Proxy (legacy compatibility)
+    elif body.session_id:
+        async with httpx.AsyncClient(timeout=15) as hc:
+            r = await hc.get(GOOGLE_SESSION_URL, headers={"X-Session-ID": body.session_id})
+        if r.status_code != 200:
+            raise HTTPException(status_code=401, detail="Google session invalid")
+        data = r.json()
+        user_info = {
+            "email": data["email"].lower(),
+            "name": data.get("name"),
+            "picture": data.get("picture"),
+            "session_token": data.get("session_token"),
+        }
+    else:
+        raise HTTPException(status_code=400, detail="Missing Google credential or session_id")
+
+    email = user_info["email"]
     existing = await db.users.find_one({"email": email})
     if existing:
         user_id = existing["user_id"]
-        await db.users.update_one({"user_id": user_id},
-                                  {"$set": {"name": data.get("name"), "picture": data.get("picture")}})
+        update_data = {}
+        if user_info.get("name") and not existing.get("name"):
+            update_data["name"] = user_info["name"]
+        if user_info.get("picture"):
+            update_data["picture"] = user_info["picture"]
+        if update_data:
+            await db.users.update_one({"user_id": user_id}, {"$set": update_data})
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         await db.users.insert_one({
-            "user_id": user_id, "email": email, "name": data.get("name"),
-            "picture": data.get("picture"), "auth_provider": "google", "created_at": iso(now_utc()),
+            "user_id": user_id,
+            "email": email,
+            "name": user_info.get("name") or email.split("@")[0],
+            "picture": user_info.get("picture"),
+            "auth_provider": "google",
+            "created_at": iso(now_utc()),
         })
-    session_token = data["session_token"]
+
+    session_token = user_info.get("session_token") or f"sess_{uuid.uuid4().hex}"
     await db.user_sessions.insert_one({
-        "user_id": user_id, "session_token": session_token,
-        "expires_at": iso(now_utc() + timedelta(days=7)), "created_at": iso(now_utc()),
+        "user_id": user_id,
+        "session_token": session_token,
+        "expires_at": iso(now_utc() + timedelta(days=7)),
+        "created_at": iso(now_utc()),
     })
+
+    _set_jwt_cookies(response, user_id, email)
     response.set_cookie("session_token", session_token, max_age=7 * 86400, **COOKIE_KW)
     return await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
+
+
+@router.post("/google/session")
+async def google_session(body: GoogleSessionBody, response: Response):
+    return await google_auth(GoogleAuthBody(session_id=body.session_id), response)
+

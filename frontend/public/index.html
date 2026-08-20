@@ -4,28 +4,160 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#116348" />
+
+    <!-- Primary Meta Tags -->
+    <title>Baseline Work — Pre-deal Scope Checks & Price Floor for Freelancers</title>
+    <meta name="title" content="Baseline Work — Pre-deal Scope Checks & Price Floor for Freelancers" />
     <meta
       name="description"
-      content="Baseline: pre-deal scope checks for short-form video freelancers. Paste a client brief, find hidden work, and quote from a price floor you can explain."
+      content="Pre-deal scope check and pricing floor calculator for short-form video freelancers. Paste a client brief, find hidden work, compute unassailable price floors, and send clean pre-deal agreements."
     />
-    <meta property="og:title" content="Baseline before yes." />
+    <meta
+      name="keywords"
+      content="freelance scope check, price floor calculator, video editor rate calculator, hidden scope detector, freelance client brief analyzer, scope creep prevention, creative freelancer pricing, TikTok Reels pricing"
+    />
+    <meta name="author" content="Baseline Work" />
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+    <link rel="canonical" href="https://baselinework.app/" />
+
+    <!-- Open Graph / Facebook / LinkedIn / WhatsApp / Telegram / Discord -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Baseline Work" />
+    <meta property="og:url" content="https://baselinework.app/" />
+    <meta property="og:title" content="Baseline Work: Pre-deal Scope Checks & Price Floor" />
     <meta
       property="og:description"
-      content="Find hidden scope, transparent hour ranges, price floor, and deal options before saying yes."
+      content="Find hidden scope, transparent hour ranges, mathematical price floors, and ready-to-send deal options before saying yes to a client."
     />
-    <meta property="og:image" content="%PUBLIC_URL%/assets/baseline-logo-512.png" />
+    <meta property="og:image" content="https://baselinework.app/assets/baseline-logo-512.png" />
+    <meta property="og:image:secure_url" content="https://baselinework.app/assets/baseline-logo-512.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="Baseline Work Logo & Dashboard" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter / X / Slack / Discord Cards -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@baselinework" />
+    <meta name="twitter:creator" content="@baselinework" />
+    <meta name="twitter:url" content="https://baselinework.app/" />
+    <meta name="twitter:title" content="Baseline Work: Pre-deal Scope Checks & Price Floor" />
+    <meta
+      name="twitter:description"
+      content="Find hidden scope, calculate price floors from real overhead, and send pre-deal agreements before you quote."
+    />
+    <meta name="twitter:image" content="https://baselinework.app/assets/baseline-logo-512.png" />
+    <meta name="twitter:image:alt" content="Baseline Work Logo & Dashboard" />
+
+    <!-- Favicon & Mobile Icons -->
     <link rel="icon" type="image/png" href="%PUBLIC_URL%/assets/baseline-favicon.png" />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/assets/baseline-logo-192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+
+    <!-- Google Fonts Preconnect & Stylesheet -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <title>Baseline: Baseline before yes.</title>
+
+    <!-- Google Identity Services (GSI) Script for Google Sign-In -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://baselinework.app/#website",
+            "url": "https://baselinework.app/",
+            "name": "Baseline Work",
+            "description": "Pre-deal scope check and pricing floor calculator for short-form video freelancers.",
+            "publisher": {
+              "@id": "https://baselinework.app/#organization"
+            },
+            "potentialAction": {
+              "@type": "SearchAction",
+              "target": {
+                "@type": "EntryPoint",
+                "urlTemplate": "https://baselinework.app/analyze?q={search_term_string}"
+              },
+              "query-input": "required name=search_term_string"
+            }
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://baselinework.app/#organization",
+            "name": "Baseline Work",
+            "url": "https://baselinework.app/",
+            "logo": {
+              "@type": "ImageObject",
+              "url": "https://baselinework.app/assets/baseline-logo-512.png",
+              "width": 512,
+              "height": 512
+            }
+          },
+          {
+            "@type": "WebApplication",
+            "@id": "https://baselinework.app/#application",
+            "name": "Baseline Work",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "All",
+            "url": "https://baselinework.app/",
+            "description": "Calculates freelance price floor, detects hidden scope in client briefs, and builds 3-tiered deal agreements.",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            },
+            "featureList": [
+              "Brief analysis & scope extraction",
+              "Hidden deliverable detector",
+              "Take-home and overhead price floor calculator",
+              "Pre-deal scope agreement generator",
+              "Multi-project calibration factor"
+            ]
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://baselinework.app/#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "What is Baseline Work?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Baseline Work is a scope auditing and price floor calculation tool for short-form video freelancers. It helps creators find hidden work in client briefs and quote prices that protect their profitability."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How does Baseline calculate the Price Floor?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Baseline computes your price floor using your target monthly take-home pay, business overhead, emergency reserve, and billable utilization percentage, then multiplies your true hourly cost by estimated project hours and a target profit margin."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Is Baseline free to use?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes, Baseline offers guest brief analysis, Judge Mode simulation, and pre-deal scope checking without mandatory sign-up."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run Baseline.</noscript>
+    <noscript>You need to enable JavaScript to run Baseline Work.</noscript>
     <div id="root"></div>
   </body>
 </html>

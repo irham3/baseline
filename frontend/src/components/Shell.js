@@ -1,16 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, BriefcaseBusiness, Gauge, LogOut, Menu, PenLine, UserRound, X } from "lucide-react";
+import { ArrowRight, BriefcaseBusiness, LogOut, Menu, UserRound, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
-const PRIMARY_NAV = [
-  { to: "/judge", label: "Demo", Icon: Gauge, testid: "nav-judge" },
-  { to: "/analyze", label: "Analyze", Icon: PenLine, testid: "nav-analyze" },
-];
+const PRIMARY_NAV = [];
 
 function isActive(pathname, target) {
-  if (target === "/analyze") return pathname.startsWith("/analyze") || pathname.startsWith("/analysis");
   if (target === "/app") return pathname === "/app";
   return pathname === target;
 }
@@ -21,25 +17,25 @@ export function Logo({ className = "", dark = false }) {
       <img
         src="/assets/baseline-logo-192.png"
         alt="Baseline Work logo"
-        className="h-8 w-8 shrink-0 rounded-lg shadow-[0_8px_18px_-12px_rgba(17,99,72,0.7)]"
+        className="h-8 w-8 shrink-0 rounded-lg shadow-[0_8px_18px_-12px_rgba(16,185,129,0.7)]"
         width="32"
         height="32"
       />
-      <span className={`text-[17px] font-extrabold tracking-tight ${dark ? "text-white" : "text-ink"}`}>
-        Baseline <span className={dark ? "text-emerald-400" : "text-green"}>Work</span>
+      <span className={`text-[16px] font-extrabold tracking-tight ${dark ? "text-white" : "text-ink"}`}>
+        Baseline <span className="text-emerald-500">Work</span>
       </span>
     </Link>
   );
 }
 
-function NavPill({ item, pathname, layoutId, onClick, dark = false }) {
+function NavPill({ item, pathname, layoutId, onClick, dark = true }) {
   const active = isActive(pathname, item.to);
   const Icon = item.Icon;
   return (
     <Link
       to={item.to}
       onClick={onClick}
-      className={`relative inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-xs font-semibold transition-colors ${
+      className={`relative inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-xs font-semibold transition-colors ${
         active 
           ? (dark ? "text-white" : "text-ink") 
           : (dark ? "text-zinc-400 hover:text-white" : "text-ink-soft hover:text-ink")
@@ -52,19 +48,19 @@ function NavPill({ item, pathname, layoutId, onClick, dark = false }) {
           layoutId={layoutId}
           className={`absolute inset-0 rounded-full ${
             dark 
-              ? "bg-white/10 border border-white/15 shadow-[0_0_20px_rgba(16,185,129,0.15)]" 
-              : "bg-surface shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_10px_24px_-18px_rgba(17,99,72,0.45)]"
+              ? "bg-white/10 border border-white/15 shadow-[0_0_15px_rgba(16,185,129,0.15)]" 
+              : "bg-surface shadow-[0_1px_2px_rgba(0,0,0,0.06),0_1px_0_rgba(255,255,255,1)_inset]"
           }`}
-          transition={{ type: "spring", stiffness: 420, damping: 34 }}
+          transition={{ type: "spring", stiffness: 450, damping: 35 }}
         />
       )}
-      <Icon size={14} className="relative" strokeWidth={2} />
+      <Icon size={13} className="relative" strokeWidth={2.2} />
       <span className="relative">{item.label}</span>
     </Link>
   );
 }
 
-export function Nav({ dark = false }) {
+export function Nav({ dark = true }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -87,16 +83,16 @@ export function Nav({ dark = false }) {
   return (
     <header className={`sticky top-0 z-40 border-b backdrop-blur-xl transition-colors ${
       dark 
-        ? "border-white/10 bg-[#090b0e]/85 text-white" 
-        : "border-line/80 bg-page/90 text-ink"
+        ? "border-white/10 bg-[#090b10]/85 text-white" 
+        : "border-line/70 bg-surface/85 text-ink"
     }`}>
-      <div className="wrap flex h-[68px] items-center justify-between gap-3">
+      <div className="wrap flex h-[64px] items-center justify-between gap-3">
         <Logo dark={dark} />
 
         <nav className={`hidden items-center rounded-full border p-1 md:flex ${
           dark 
             ? "border-white/10 bg-white/[0.04]" 
-            : "border-line/80 bg-raised/70"
+            : "border-line/80 bg-raised/60"
         }`} aria-label="Primary navigation">
           {navItems.map((item) => (
             <NavPill key={item.to} item={item} pathname={location.pathname} layoutId="desktop-nav-active" dark={dark} />
@@ -106,44 +102,31 @@ export function Nav({ dark = false }) {
         <div className="hidden items-center gap-2.5 md:flex">
           {user ? (
             <>
-              <Link to="/app" className={dark ? "btn-sm rounded-full border border-white/15 bg-white/5 px-4 text-xs font-semibold text-white hover:bg-white/10" : "btn-secondary btn-sm max-w-[190px]"} data-testid="nav-account">
-                <UserRound size={14} />
-                <span className="truncate">{user.name || "Account"}</span>
+              <Link to="/app" className={dark ? "rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-xs font-semibold text-zinc-200 hover:bg-white/10 hover:text-white max-w-[180px] truncate" : "btn-secondary btn-sm max-w-[180px]"} data-testid="nav-account">
+                <UserRound size={13} className="inline mr-1" />
+                <span>{user.name || "Workspace"}</span>
               </Link>
-              <button onClick={signOut} className={dark ? "rounded-full p-2 text-zinc-400 hover:text-white hover:bg-white/5" : "btn-ghost btn-sm px-3"} data-testid="nav-logout" aria-label="Sign out" title="Sign out">
-                <LogOut size={15} />
+              <button onClick={signOut} className={dark ? "rounded-full p-2 text-zinc-400 hover:text-white hover:bg-white/5 transition-colors" : "btn-ghost btn-sm px-2.5 text-ink-faint hover:text-danger"} data-testid="nav-logout" aria-label="Sign out" title="Sign out">
+                <LogOut size={14} />
               </button>
             </>
           ) : (
-            <Link to="/login" className={dark ? "rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold text-zinc-300 hover:bg-white/10 hover:text-white transition-colors" : "btn-secondary btn-sm"} data-testid="nav-login">
+            <Link to="/login" className={dark ? "rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-white/10 hover:text-white transition-colors" : "btn-ghost btn-sm text-xs font-semibold"} data-testid="nav-login">
               Sign in
             </Link>
           )}
-          <Link 
-            to="/judge" 
-            className={dark 
-              ? "inline-flex items-center gap-1.5 rounded-full bg-emerald-500 hover:bg-emerald-400 px-4 py-2 text-xs font-bold text-zinc-950 shadow-[0_0_20px_rgba(16,185,129,0.35)] transition-all hover:scale-[1.02]" 
-              : "btn-primary btn-sm"
-            } 
-            data-testid="nav-demo-cta"
-          >
-            <span>Run demo</span> <ArrowRight size={13} strokeWidth={2.5} />
-          </Link>
         </div>
 
         <div className="flex items-center gap-2 md:hidden">
-          <Link to="/judge" className={dark ? "rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-zinc-950" : "btn-primary btn-sm px-3"} data-testid="nav-demo-mobile">
-            Demo
-          </Link>
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className={dark ? "rounded-full border border-white/15 bg-white/5 p-2 text-white" : "btn-secondary btn-sm h-10 w-10 px-0"}
+            className={dark ? "rounded-full border border-white/15 bg-white/5 p-2 text-white" : "btn-secondary btn-sm h-9 w-9 px-0"}
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
             data-testid="mobile-menu-toggle"
           >
-            {open ? <X size={18} /> : <Menu size={18} />}
+            {open ? <X size={16} /> : <Menu size={16} />}
           </button>
         </div>
       </div>
@@ -151,26 +134,26 @@ export function Nav({ dark = false }) {
       <AnimatePresence initial={false}>
         {open && (
           <motion.div
-            initial={reduceMotion ? false : { opacity: 0, y: -8 }}
+            initial={reduceMotion ? false : { opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
-            transition={{ duration: reduceMotion ? 0 : 0.18 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+            transition={{ duration: reduceMotion ? 0 : 0.16 }}
             className="md:hidden"
           >
             <nav className="wrap pb-3" aria-label="Mobile navigation">
-              <div className={`grid gap-1 rounded-2xl border p-2 shadow-2xl ${
-                dark ? "border-white/15 bg-[#0e1117] text-white" : "border-line bg-surface shadow-lift"
+              <div className={`grid gap-1 rounded-2xl border p-2 shadow-xl ${
+                dark ? "border-white/15 bg-[#0e1219] text-white" : "border-line bg-surface"
               }`}>
                 {navItems.map((item) => (
                   <NavPill key={item.to} item={item} pathname={location.pathname} layoutId="mobile-nav-active" dark={dark} />
                 ))}
                 {user ? (
-                  <button onClick={signOut} className={`btn-sm justify-start px-3.5 ${dark ? "text-zinc-300 hover:text-white" : "btn-ghost"}`} data-testid="nav-logout-mobile">
-                    <LogOut size={15} /> Sign out
+                  <button onClick={signOut} className={`btn-sm justify-start px-3.5 ${dark ? "text-rose-400 hover:bg-rose-500/10" : "text-danger hover:bg-danger-soft/30"}`} data-testid="nav-logout-mobile">
+                    <LogOut size={14} /> Sign out
                   </button>
                 ) : (
                   <Link to="/login" className={`btn-sm justify-start px-3.5 ${dark ? "text-zinc-300 hover:text-white" : "btn-ghost"}`} data-testid="nav-login-mobile">
-                    <UserRound size={15} /> Sign in
+                    <UserRound size={14} /> Sign in
                   </Link>
                 )}
               </div>
@@ -182,34 +165,36 @@ export function Nav({ dark = false }) {
   );
 }
 
-export function Footer({ dark = false }) {
+export function Footer({ dark = true }) {
   const { user } = useAuth();
 
   return (
     <footer className={`mt-auto border-t transition-colors ${
       dark 
-        ? "border-white/10 bg-[#060709] text-zinc-400" 
-        : "mt-20 border-line/80 bg-surface/55 text-ink-soft"
+        ? "border-white/10 bg-[#06070a] text-zinc-400" 
+        : "mt-20 border-line/80 bg-surface/70 text-ink-soft"
     }`}>
-      <div className="wrap grid gap-8 py-12 md:grid-cols-[1.2fr_0.8fr_1fr]">
+      <div className="wrap grid gap-8 py-12 md:grid-cols-[1.3fr_0.8fr_0.9fr]">
         <div>
           <Logo dark={dark} />
-          <p className={`mt-3 max-w-sm text-sm leading-relaxed ${dark ? "text-zinc-400" : "text-ink-soft"}`}>
-            Pre-deal scope checks for freelance short-form video work. Built to price the floor and protect creator margins before production starts.
+          <p className={`mt-3 max-w-sm text-xs leading-relaxed ${dark ? "text-zinc-400" : "text-ink-faint"}`}>
+            AI pre-deal baseline check & deterministic price floor calculator for short-form video freelancers. Built for Building Indonesia 2026.
           </p>
+          <div className="mt-4 flex items-center gap-2 text-[11px] font-mono text-zinc-500">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
+            <span>Deterministic Math Engine • Zero Pricing Hallucinations</span>
+          </div>
         </div>
-        <nav className="grid gap-2.5 text-sm" aria-label="Footer navigation">
-          <span className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-zinc-500" : "text-ink-faint"}`}>Navigation</span>
-          <Link className={`font-medium transition-colors ${dark ? "text-zinc-300 hover:text-emerald-400" : "text-ink-soft hover:text-ink"}`} to="/judge">Run demo</Link>
-          <Link className={`font-medium transition-colors ${dark ? "text-zinc-300 hover:text-emerald-400" : "text-ink-soft hover:text-ink"}`} to="/analyze">Analyze brief</Link>
-          <Link className={`font-medium transition-colors ${dark ? "text-zinc-300 hover:text-emerald-400" : "text-ink-soft hover:text-ink"}`} to={user ? "/app" : "/login"}>
-            {user ? "Workspace" : "Sign in"}
+        <nav className="grid gap-2 text-xs" aria-label="Footer navigation">
+          <span className={`font-bold uppercase tracking-wider ${dark ? "text-zinc-300" : "text-ink"}`}>Navigation</span>
+          <Link className={`font-medium transition-colors ${dark ? "text-zinc-400 hover:text-emerald-400" : "text-ink-soft hover:text-green"}`} to={user ? "/app" : "/login"}>
+            {user ? "Freelancer Workspace" : "Sign in / Register"}
           </Link>
         </nav>
         <div>
-          <span className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-zinc-500" : "text-ink-faint"}`}>Notice</span>
-          <p className={`mt-2.5 max-w-md text-xs leading-relaxed ${dark ? "text-zinc-500" : "text-ink-faint"}`}>
-            Baseline Work is an estimation and scope-documentation aid. It is not legal advice, a contract substitute, or a profit guarantee.
+          <span className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-zinc-300" : "text-ink"}`}>Notice</span>
+          <p className={`mt-2 max-w-md text-xs leading-relaxed ${dark ? "text-zinc-500" : "text-ink-faint"}`}>
+            Baseline Work is a scope documentation and estimation instrument. All pricing is derived from verified cost profiles and transparent hourly productivity mathematics.
           </p>
         </div>
       </div>
@@ -217,9 +202,9 @@ export function Footer({ dark = false }) {
   );
 }
 
-export function Shell({ children, dark = false, className = "" }) {
+export function Shell({ children, dark = true, className = "" }) {
   return (
-    <div className={`flex min-h-screen flex-col ${dark ? "bg-[#090b0e] text-white" : "bg-page text-ink"} ${className}`}>
+    <div className={`flex min-h-screen flex-col ${dark ? "dark-shell bg-[#090b10] text-white" : "bg-page text-ink"} ${className}`}>
       <a href="#main-content" className="skip-link">
         Skip to content
       </a>
@@ -229,3 +214,5 @@ export function Shell({ children, dark = false, className = "" }) {
     </div>
   );
 }
+
+

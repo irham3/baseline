@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Save, Trash2, History, ArrowRight, Check } from "lucide-react";
 import { Shell } from "@/components/Shell";
+import { SEO } from "@/components/SEO";
 import { Spinner, Badge, Toast } from "@/components/ui/primitives";
 import CostProfileForm, { DEMO_COST_PROFILE } from "@/components/CostProfileForm";
 import { useAuth } from "@/context/AuthContext";
@@ -89,6 +90,12 @@ export default function Workspace() {
 
   return (
     <Shell>
+      <SEO
+        title="Freelancer Workspace — Cost Profile & Calibration"
+        description="Manage your freelancer baseline cost profile, project calibrations, and rate safeguards."
+        canonical="/app"
+        noIndex={true}
+      />
       <div className="wrap-narrow py-8">
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-extrabold text-ink">Hi, {user?.name || "freelancer"}</h1>

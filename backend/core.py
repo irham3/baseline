@@ -113,21 +113,126 @@ class _MemoryDatabase:
         return self.__getattr__(name)
 
 
+class _CollectionProxy:
+    def __init__(self, db_proxy, name: str):
+        self._db_proxy = db_proxy
+        self._name = name
+
+    def _get_target(self):
+        return self._db_proxy._get_collection(self._name)
+
+    async def insert_one(self, *args, **kwargs):
+        try:
+            return await self._get_target().insert_one(*args, **kwargs)
+        except Exception as e:
+            self._db_proxy._fallback(e)
+            return await self._get_target().insert_one(*args, **kwargs)
+
+    async def find_one(self, *args, **kwargs):
+        try:
+            return await self._get_target().find_one(*args, **kwargs)
+        except Exception as e:
+            self._db_proxy._fallback(e)
+            return await self._get_target().find_one(*args, **kwargs)
+
+    def find(self, *args, **kwargs):
+        try:
+            if not self._db_proxy._use_memory and self._db_proxy._motor_db is not None:
+                return self._db_proxy._motor_db[self._name].find(*args, **kwargs)
+        except Exception as e:
+            self._db_proxy._fallback(e)
+        return self._db_proxy._memory_db[self._name].find(*args, **kwargs)
+
+    async def update_one(self, *args, **kwargs):
+        try:
+            return await self._get_target().update_one(*args, **kwargs)
+        except Exception as e:
+            self._db_proxy._fallback(e)
+            return await self._get_target().update_one(*args, **kwargs)
+
+    async def delete_one(self, *args, **kwargs):
+        try:
+            return await self._get_target().delete_one(*args, **kwargs)
+        except Exception as e:
+            self._db_proxy._fallback(e)
+            return await self._get_target().delete_one(*args, **kwargs)
+
+    async def delete_many(self, *args, **kwargs):
+        try:
+            return await self._get_target().delete_many(*args, **kwargs)
+        except Exception as e:
+            self._db_proxy._fallback(e)
+            return await self._get_target().delete_many(*args, **kwargs)
+
+    async def count_documents(self, *args, **kwargs):
+        try:
+            return await self._get_target().count_documents(*args, **kwargs)
+        except Exception as e:
+            self._db_proxy._fallback(e)
+            return await self._get_target().count_documents(*args, **kwargs)
+
+    async def create_index(self, *args, **kwargs):
+        try:
+            if not self._db_proxy._use_memory and self._db_proxy._motor_db is not None:
+                return await self._db_proxy._motor_db[self._name].create_index(*args, **kwargs)
+        except Exception as e:
+            self._db_proxy._fallback(e)
+        return None
+
+
+class _DatabaseProxy:
+    def __init__(self, motor_db, memory_db):
+        self._motor_db = motor_db
+        self._memory_db = memory_db
+        self._use_memory = motor_db is None
+        self._collections = {}
+
+    def _fallback(self, error):
+        if not self._use_memory:
+            import logging
+            logging.getLogger("uvicorn.error").warning(
+                f"MongoDB connection failed ({error}); falling back to in-memory database."
+            )
+            self._use_memory = True
+
+    def _get_collection(self, name: str):
+        if self._use_memory or self._motor_db is None:
+            return self._memory_db[name]
+        return self._motor_db[name]
+
+    def __getattr__(self, name: str):
+        if name.startswith("_"):
+            raise AttributeError(name)
+        if name not in self._collections:
+            self._collections[name] = _CollectionProxy(self, name)
+        return self._collections[name]
+
+    def __getitem__(self, name: str):
+        return self.__getattr__(name)
+
+
 MONGO_URL = os.environ.get("MONGO_URL")
 DB_NAME = os.environ.get("DB_NAME", "baseline_dev")
+_motor_client = None
+_motor_db = None
 if MONGO_URL:
-    client = AsyncIOMotorClient(MONGO_URL)
-    db = client[DB_NAME]
-else:
-    client = None
-    db = _MemoryDatabase()
+    try:
+        _motor_client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=2000)
+        _motor_db = _motor_client[DB_NAME]
+    except Exception:
+        _motor_client = None
+        _motor_db = None
+
+client = _motor_client
+_mem_db = _MemoryDatabase()
+db = _DatabaseProxy(_motor_db, _mem_db)
 
 GOOGLE_SESSION_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 _cookie_secure_env = os.environ.get("COOKIE_SECURE")
 if _cookie_secure_env is None:
-    COOKIE_SECURE = bool(MONGO_URL)
+    COOKIE_SECURE = False
 else:
-    COOKIE_SECURE = _cookie_secure_env.lower() not in ("0", "false", "no")
+    COOKIE_SECURE = _cookie_secure_env.lower() in ("1", "true", "yes")
 COOKIE_KW = dict(httponly=True, secure=COOKIE_SECURE, samesite="none" if COOKIE_SECURE else "lax", path="/")
 
 MAX_MEMORY_PROJECTS = 5
