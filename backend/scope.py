@@ -288,7 +288,7 @@ def whatsapp_message(scope: dict, options: list[dict], tone: str = "warm") -> st
         f"{_deliverable_line(a)} ({format_idr(a['price'])}, about {a['timeline_days']} working days "
         f"after all assets are complete). It includes {revision_phrase(a['revision_rounds'])}.\n\n"
         f"If you want to keep all {b['quantity']} Reels with footage selection and {revision_phrase(b['revision_rounds'])}, "
-        f"the estimate is {format_idr(b['price'])} over about 3 weeks after all assets are complete.\n\n"
+        f"the estimate is {format_idr(b['price'])}, about {b['timeline_days']} working days after all assets are complete.\n\n"
         f"I summarized the options in this link so we can choose the cleanest scope before production starts."
     )
 
