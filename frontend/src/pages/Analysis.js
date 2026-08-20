@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { TriangleAlert, Link2, ExternalLink, Copy, Check, ArrowLeft } from "lucide-react";
+import { TriangleAlert, Link2, ExternalLink, Copy, Check, ArrowLeft, Ban } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { SEO } from "@/components/SEO";
 import { Spinner, Badge, Toast } from "@/components/ui/primitives";
@@ -70,6 +70,8 @@ export default function Analysis() {
   const [projectTitle, setProjectTitle] = useState("");
   const [agreement, setAgreement] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
   const [toast, setToast] = useState("");
 
   useEffect(() => {
@@ -137,6 +139,25 @@ export default function Analysis() {
       setTimeout(() => setToast(""), 3000);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const revokeAgreement = async () => {
+    if (!agreement) return;
+    setRevoking(true);
+    try {
+      await client.post(`/analysis/${id}/agreement/${agreement.token}/revoke`);
+      setAgreement(null);
+      setProjectTitle("");
+      setConfirmRevoke(false);
+      track("agreement_revoked", { analysis_id: id });
+      setToast("Link revoked. Clients can no longer respond to it.");
+      setTimeout(() => setToast(""), 3000);
+    } catch (e) {
+      setToast(apiErrorMessage(e.response?.data?.detail) || "Failed to revoke the link.");
+      setTimeout(() => setToast(""), 3000);
+    } finally {
+      setRevoking(false);
     }
   };
 
@@ -287,6 +308,19 @@ export default function Analysis() {
                         <a href={`/s/${agreement.token}`} target="_blank" rel="noreferrer" className="btn-primary btn-sm" data-testid="open-agreement">
                           Open <ExternalLink size={14} />
                         </a>
+                        {!confirmRevoke ? (
+                          <button onClick={() => setConfirmRevoke(true)} className="btn-ghost btn-sm text-danger" data-testid="revoke-agreement">
+                            <Ban size={14} /> Revoke
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-2 rounded-xl border border-danger/30 bg-danger/5 px-3 py-1.5" data-testid="revoke-confirm">
+                            <span className="text-[12px] font-medium text-danger">Revoke this link? The client won't be able to respond anymore.</span>
+                            <button onClick={revokeAgreement} disabled={revoking} className="btn-danger btn-sm">
+                              {revoking ? <Spinner size={13} /> : "Confirm"}
+                            </button>
+                            <button onClick={() => setConfirmRevoke(false)} disabled={revoking} className="btn-ghost btn-sm">Cancel</button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
