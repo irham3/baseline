@@ -109,3 +109,50 @@ def test_unverified_email_still_rejected(monkeypatch):
 
     r = client.post("/api/auth/google", json={"credential": "fake-id-token"})
     assert r.status_code == 401
+
+
+# -------- Silent refresh (/auth/refresh -- previously built but never called by
+# the frontend; a user's access_token cookie would expire after 7 days and they'd
+# look logged out even though the refresh_token cookie is valid for 30) --------
+def test_refresh_issues_a_working_new_access_token():
+    email = f"refresh_test_{uuid.uuid4().hex[:8]}@example.com"
+    r = client.post("/api/auth/register", json={"email": email, "password": "testpass123", "name": "Refresh Test"})
+    assert r.status_code == 200
+
+    r2 = client.post("/api/auth/refresh")
+    assert r2.status_code == 200
+
+    r3 = client.get("/api/auth/me")
+    assert r3.status_code == 200
+    assert r3.json()["email"] == email
+
+
+def test_refresh_without_any_cookie_rejected():
+    fresh_client = TestClient(server.app)  # no cookie jar carried over
+    r = fresh_client.post("/api/auth/refresh")
+    assert r.status_code == 401
+
+
+def test_expired_access_token_returns_401():
+    # Same scenario proven end to end against the actual running server via curl
+    # (expired access_token -> 401 -> /auth/refresh with the valid refresh_token ->
+    # 200 with a new access_token -> /auth/me succeeds); kept narrower here since
+    # TestClient's cookie jar doesn't cleanly support overriding one cookie while
+    # preserving another already set by a prior response in the same session.
+    import jwt as pyjwt
+    from datetime import datetime, timezone, timedelta
+
+    fresh_client = TestClient(server.app)
+    email = f"refresh_test2_{uuid.uuid4().hex[:8]}@example.com"
+    r = fresh_client.post("/api/auth/register", json={"email": email, "password": "testpass123", "name": "Refresh Test 2"})
+    user_id = r.json()["user_id"]
+
+    expired = pyjwt.encode(
+        {"sub": user_id, "email": email, "type": "access", "exp": datetime.now(timezone.utc) - timedelta(days=1)},
+        os.environ["JWT_SECRET"], algorithm="HS256",
+    )
+    fresh_client.cookies.delete("access_token")
+    fresh_client.cookies.set("access_token", expired)
+
+    r2 = fresh_client.get("/api/auth/me")
+    assert r2.status_code == 401
