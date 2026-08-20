@@ -154,8 +154,11 @@ function Stepper({ index }) {
   );
 }
 
-function StepCard({ children }) {
-  return <div className="mx-auto w-full max-w-2xl">{children}</div>;
+function StepCard({ children, wide = false }) {
+  // Text-heavy steps stay at a comfortable reading width; grid-heavy steps
+  // (evidence, estimate, options) get more room so they don't look cramped on
+  // a laptop-sized screen with a lot of unused space either side.
+  return <div className={`mx-auto w-full ${wide ? "max-w-5xl" : "max-w-3xl"}`}>{children}</div>;
 }
 
 function NavRow({ onBack, onNext, nextLabel = "Next", nextDisabled = false, backHidden = false }) {
@@ -264,7 +267,7 @@ export default function Judge() {
         noIndex
       />
       <div className="min-h-screen bg-[#090b10] px-5 py-10 text-white sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto max-w-5xl">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold text-emerald-400">
@@ -309,7 +312,7 @@ export default function Judge() {
 
           {/* Step 1: Evidence map */}
           {step === 1 && (
-            <StepCard>
+            <StepCard wide>
               <div className="card p-5">
                 <h2 className="mb-1 font-bold text-ink">Stated, assumed, and missing evidence</h2>
                 <p className="mb-4 text-sm text-ink-soft">
@@ -360,7 +363,7 @@ export default function Judge() {
 
           {/* Step 3: Estimate + risk */}
           {step === 3 && (
-            <StepCard>
+            <StepCard wide>
               <EstimateResult
                 estimate={seed.estimate}
                 price={seed.price}
@@ -377,7 +380,7 @@ export default function Judge() {
 
           {/* Step 4: Options */}
           {step === 4 && (
-            <StepCard>
+            <StepCard wide>
               <div className="card p-5">
                 <h2 className="mb-1 font-bold text-ink">Three bounded options</h2>
                 <p className="mb-4 text-sm text-ink-soft">Pick the one you would send. Every number here comes from the deterministic engine, not AI.</p>
