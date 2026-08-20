@@ -74,6 +74,9 @@ export default function Analysis() {
   const [creating, setCreating] = useState(false);
   const [revoking, setRevoking] = useState(false);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [polishedDrafts, setPolishedDrafts] = useState(null);
+  const [polishing, setPolishing] = useState(false);
+  const [polishError, setPolishError] = useState(null);
   const [scopeCheckText, setScopeCheckText] = useState("");
   const [scopeChecking, setScopeChecking] = useState(false);
   const [scopeCheckResult, setScopeCheckResult] = useState(null);
@@ -126,7 +129,26 @@ export default function Analysis() {
   const selectOption = (opt) => {
     setDeclineMode(false);
     setSelected(opt.id);
+    setPolishedDrafts(null); // stale once the underlying option/numbers change
     track("option_selected", { analysis_id: id, option: opt.id });
+  };
+
+  const polishWithAi = async () => {
+    if (!result?.options || result.options.length < 2) return;
+    setPolishing(true);
+    setPolishError(null);
+    try {
+      const { data } = await client.post(`/analysis/${id}/deal-copy`, {
+        scope_overrides: overrides,
+        options: result.options,
+      });
+      setPolishedDrafts(data.whatsapp);
+      track("whatsapp_polished", { analysis_id: id });
+    } catch (e) {
+      setPolishError(apiErrorMessage(e.response?.data?.detail) || "Could not polish with AI. The template draft below is still fine to send.");
+    } finally {
+      setPolishing(false);
+    }
   };
 
   const createAgreement = async () => {
@@ -303,12 +325,32 @@ export default function Analysis() {
             </div>
 
             <div className="mt-5 grid gap-6 lg:grid-cols-2">
-              <WhatsAppPreview
-                drafts={result.whatsapp}
-                declineMode={declineMode}
-                declineMessage={result.decline_message}
-                onCopy={() => track("whatsapp_copied", { analysis_id: id, decline: declineMode })}
-              />
+              <div>
+                {!declineMode && (
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <button onClick={polishWithAi} disabled={polishing} className="btn-secondary btn-sm" data-testid="polish-with-ai">
+                      {polishing ? <><Spinner size={13} /> Polishing...</> : <>✨ Polish with AI</>}
+                    </button>
+                    {polishedDrafts && (
+                      <>
+                        <Badge tone="green">AI-polished</Badge>
+                        <button onClick={() => setPolishedDrafts(null)} className="text-[12px] font-semibold text-ink-faint hover:text-ink">Use template instead</button>
+                      </>
+                    )}
+                    {polishError && (
+                      <span className="text-[12px] font-semibold text-danger" data-testid="polish-error">
+                        {polishError} <button onClick={polishWithAi} className="underline underline-offset-2">Retry</button>
+                      </span>
+                    )}
+                  </div>
+                )}
+                <WhatsAppPreview
+                  drafts={polishedDrafts || result.whatsapp}
+                  declineMode={declineMode}
+                  declineMessage={result.decline_message}
+                  onCopy={() => track("whatsapp_copied", { analysis_id: id, decline: declineMode })}
+                />
+              </div>
 
               {/* Agreement Sheet creation */}
               {!declineMode && (
