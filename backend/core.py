@@ -243,6 +243,10 @@ _mem_db = _MemoryDatabase()
 db = _DatabaseProxy(_motor_db, _mem_db)
 
 GOOGLE_SESSION_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
+# Same public OAuth client ID the frontend uses (REACT_APP_GOOGLE_CLIENT_ID) -- not a
+# secret. When set, Google ID tokens must have a matching `aud` claim (see
+# routers/auth.py); when unset, audience is not checked (matches prior behavior).
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 _cookie_secure_env = os.environ.get("COOKIE_SECURE")
 if _cookie_secure_env is None:
     COOKIE_SECURE = False

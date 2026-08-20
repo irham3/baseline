@@ -9,7 +9,7 @@ import httpx
 from fastapi import APIRouter, Request, Response, HTTPException, Depends
 
 import auth as auth_mod
-from core import db, now_utc, iso, clean, COOKIE_KW, GOOGLE_SESSION_URL, require_user
+from core import db, now_utc, iso, clean, COOKIE_KW, GOOGLE_SESSION_URL, GOOGLE_CLIENT_ID, require_user
 from models import RegisterBody, LoginBody, GoogleSessionBody, GoogleAuthBody
 
 router = APIRouter(prefix="/api/auth")
@@ -88,6 +88,12 @@ async def google_auth(body: GoogleAuthBody, response: Response):
         if r.status_code != 200:
             raise HTTPException(status_code=401, detail="Invalid Google ID token")
         data = r.json()
+
+        # tokeninfo already verifies signature, issuer, and expiration. We still must
+        # check audience ourselves -- a token can be validly signed by Google for a
+        # completely different OAuth client and still pass tokeninfo.
+        if GOOGLE_CLIENT_ID and data.get("aud") != GOOGLE_CLIENT_ID:
+            raise HTTPException(status_code=401, detail="Google ID token was not issued for this app")
 
         # Check email verification
         if str(data.get("email_verified", "")).lower() not in ("true", "1"):
