@@ -11,11 +11,12 @@ import json
 import secrets
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Depends
 
 import pricing
 import scope as scope_mod
 from core import db, now_utc, iso, resolve_owner
+from rate_limit import rate_limit
 from models import AgreementBody, AgreementResponseBody, DemoAgreementBody
 
 router = APIRouter(prefix="/api")
@@ -94,7 +95,7 @@ async def revoke_agreement(analysis_id: str, token: str, request: Request):
     return {"ok": True, "status": "REVOKED"}
 
 
-@router.post("/demo/agreement")
+@router.post("/demo/agreement", dependencies=[Depends(rate_limit("demo-agreement", 10, 60))])
 async def demo_agreement(body: DemoAgreementBody):
     seed = scope_mod.compute_seed_analysis()
     opt = next((o for o in seed["options"] if o["id"] == body.option_id and o.get("price") is not None), seed["options"][1])
@@ -137,7 +138,7 @@ async def get_agreement(token: str):
     }
 
 
-@router.post("/agreement/{token}/respond")
+@router.post("/agreement/{token}/respond", dependencies=[Depends(rate_limit("agreement-respond", 10, 60))])
 async def respond_agreement(token: str, body: AgreementResponseBody):
     doc = await db.scope_agreements.find_one({"token": token})
     if not doc:

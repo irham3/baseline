@@ -11,6 +11,7 @@ from fastapi import APIRouter, Request, Response, HTTPException, Depends
 import auth as auth_mod
 from core import db, now_utc, iso, clean, COOKIE_KW, GOOGLE_SESSION_URL, GOOGLE_CLIENT_ID, require_user
 from models import RegisterBody, LoginBody, GoogleSessionBody, GoogleAuthBody
+from rate_limit import rate_limit
 
 router = APIRouter(prefix="/api/auth")
 
@@ -22,7 +23,7 @@ def _set_jwt_cookies(response: Response, user_id: str, email: str):
                         max_age=auth_mod.REFRESH_TOKEN_DAYS * 86400, **COOKIE_KW)
 
 
-@router.post("/register")
+@router.post("/register", dependencies=[Depends(rate_limit("register", 5, 60))])
 async def register(body: RegisterBody, response: Response):
     email = body.email.lower()
     if await db.users.find_one({"email": email}):
@@ -38,7 +39,7 @@ async def register(body: RegisterBody, response: Response):
     return {"user_id": user_id, "email": email, "name": name, "auth_provider": "password"}
 
 
-@router.post("/login")
+@router.post("/login", dependencies=[Depends(rate_limit("login", 5, 60))])
 async def login(body: LoginBody, response: Response):
     email = body.email.lower()
     user = await db.users.find_one({"email": email})
@@ -77,7 +78,7 @@ async def me(user: dict = Depends(require_user)):
     return user
 
 
-@router.post("/google")
+@router.post("/google", dependencies=[Depends(rate_limit("google-auth", 10, 60))])
 async def google_auth(body: GoogleAuthBody, response: Response):
     user_info = None
 

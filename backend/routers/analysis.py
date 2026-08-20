@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Depends
 
 import pricing
 import scope as scope_mod
@@ -11,6 +11,7 @@ import ai_service
 import core
 from core import db, now_utc, iso, clean, resolve_user, resolve_owner
 from models import AnalyzeBody, CostProfileBody, EstimateBody, DealCopyBody, ScopeCheckBody
+from rate_limit import rate_limit
 
 router = APIRouter(prefix="/api")
 
@@ -70,7 +71,7 @@ def build_scope(ov: dict) -> dict:
 
 
 # -------- analyze --------
-@router.post("/analyze")
+@router.post("/analyze", dependencies=[Depends(rate_limit("analyze", 10, 60))])
 async def analyze(body: AnalyzeBody, request: Request):
     if len(body.brief.strip()) < 15:
         raise HTTPException(status_code=422, detail="Brief is too short to analyze (minimum 15 characters).")
@@ -260,7 +261,7 @@ async def deal_copy(analysis_id: str, body: DealCopyBody, request: Request):
 
 
 # -------- Scope Check (P0.5) --------
-@router.post("/analysis/{analysis_id}/scope-check")
+@router.post("/analysis/{analysis_id}/scope-check", dependencies=[Depends(rate_limit("scope-check", 10, 60))])
 async def scope_check(analysis_id: str, body: ScopeCheckBody, request: Request):
     doc = await _owned_analysis(analysis_id, request)
     agreement = await db.scope_agreements.find_one({"analysis_id": analysis_id}, {"_id": 0},

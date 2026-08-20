@@ -7,7 +7,7 @@ load_dotenv()
 import os
 import uuid
 
-from fastapi import FastAPI, APIRouter, Request, HTTPException
+from fastapi import FastAPI, APIRouter, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -15,6 +15,7 @@ import ai_service
 import pricing
 from core import db, now_utc, iso, resolve_owner, ENVIRONMENT, IS_PRODUCTION, MONGO_URL
 from models import AnalyticsBody
+from rate_limit import rate_limit
 from routers import auth, analysis, agreement, account
 
 app = FastAPI(title="Baseline API")
@@ -52,7 +53,7 @@ async def health():
     }
 
 
-@misc.post("/analytics")
+@misc.post("/analytics", dependencies=[Depends(rate_limit("analytics", 30, 60))])
 async def track(body: AnalyticsBody, request: Request):
     if body.event not in ALLOWED_ANALYTICS_EVENTS:
         raise HTTPException(status_code=422, detail="Unknown analytics event.")
@@ -93,6 +94,39 @@ async def security_headers(request: Request, call_next):
     if IS_PRODUCTION:
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     return response
+
+
+# --------------------------------------------------------------------------
+# CSRF/origin protection (Phase 8.3): cookies alone don't stop cross-site
+# requests once COOKIE_SECURE=true sets SameSite=None (needed for a
+# cross-subdomain frontend/backend split), so state-changing requests that
+# carry a cookie-based auth token must also have a matching Origin/Referer.
+# Guest flows (X-Guest-Id header, not a cookie) aren't covered by this check --
+# a cross-site page cannot read another origin's localStorage to forge that
+# header, so they aren't vulnerable the same way.
+# --------------------------------------------------------------------------
+COOKIE_AUTH_NAMES = {"access_token", "refresh_token", "session_token"}
+
+
+def _origin_allowed(origin: str) -> bool:
+    normalized = {o.rstrip("/") for o in _origins}
+    return origin.rstrip("/") in normalized
+
+
+@app.middleware("http")
+async def csrf_origin_guard(request: Request, call_next):
+    if request.method in ("POST", "PUT", "PATCH", "DELETE") and COOKIE_AUTH_NAMES & request.cookies.keys():
+        origin = request.headers.get("origin")
+        if not origin:
+            referer = request.headers.get("referer")
+            if referer:
+                from urllib.parse import urlsplit
+                parts = urlsplit(referer)
+                if parts.scheme and parts.netloc:
+                    origin = f"{parts.scheme}://{parts.netloc}"
+        if origin and not _origin_allowed(origin):
+            return JSONResponse(status_code=403, content={"detail": "Cross-origin request blocked."})
+    return await call_next(request)
 
 
 @app.on_event("startup")
