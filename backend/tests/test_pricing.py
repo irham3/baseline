@@ -122,8 +122,58 @@ def test_options_match_illustrative_plan():
     assert by_id["B"]["price"] >= by_id["B"]["price_floor_low"]
 
 
-# ---- Redaction ----
-def test_redaction_phone_and_email():
+# ---- Duration effort model (FORMULA_VERSION 1.1.0) ----
+def test_duration_affects_hours():
+    base = scope_mod.resolved_seed_scope()
+    short = pricing.estimate_hours({**base, "final_duration": 15})
+    long = pricing.estimate_hours({**base, "final_duration": 90})
+    assert short["low"] < long["low"]
+    assert short["high"] < long["high"]
+
+
+def test_duration_reference_45s_is_neutral():
+    # 45s is the neutral reference (multiplier 1.0) so the seed baseline is unchanged.
+    est = pricing.estimate_hours(scope_mod.resolved_seed_scope())
+    assert est["duration_multiplier"] == 1.0
+    assert est["low"] == 37.0 and est["high"] == 42.0
+
+
+def test_duration_multiplier_bands_monotonic():
+    m15, _ = pricing.duration_multiplier(15)
+    m45, _ = pricing.duration_multiplier(45)
+    m90, _ = pricing.duration_multiplier(90)
+    m200, _ = pricing.duration_multiplier(200)
+    assert m15 < m45 <= m90 < m200
+
+
+# ---- Option A viability (no fake budget-fit option) ----
+def test_no_viable_scope_when_budget_impossible():
+    opts = scope_mod.build_options(scope_mod.resolved_seed_scope(), 100000, 0.20, 200000)
+    a = next(o for o in opts if o["id"] == "A")
+    assert a["viable"] is False
+    assert a["type"] == "no_viable_scope"
+    assert a["price"] is None
+    # Its own floor must be strictly above the impossible budget.
+    assert a["price_floor_high"] > 200000
+
+
+def test_no_option_priced_below_its_own_floor():
+    opts = scope_mod.build_options(scope_mod.resolved_seed_scope(), 100000, 0.20, 3000000)
+    for o in opts:
+        if o.get("viable", True) and o.get("price") is not None:
+            assert o["price"] >= o["price_floor_low"]
+
+
+# ---- Agreement snapshot must never leak internal cost data ----
+def test_agreement_snapshot_has_no_internal_cost():
+    opts = scope_mod.build_options(scope_mod.resolved_seed_scope(), 100000, 0.20, 3000000)
+    b = next(o for o in opts if o["id"] == "B")
+    snap = scope_mod.agreement_snapshot(b, "Test project")
+    forbidden = {"cost_per_hour", "labor_cost_low", "labor_cost_high", "break_even_low",
+                 "break_even_high", "target_margin", "price_floor_low", "price_floor_high", "buffers"}
+    assert forbidden.isdisjoint(snap.keys())
+    assert snap["price"] == b["price"]
+
     text = "Hubungi 081234567890 atau email owner@brand.co.id ya"
     out = scope_mod.redact_pii(text)
     assert "081234567890" not in out["text"]

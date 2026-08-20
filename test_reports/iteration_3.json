@@ -1,0 +1,55 @@
+{
+  "summary": "Backend-only verification of the Baseline integrity slice (formula 1.1.0). Wrote pytest API regression suites (/app/backend/tests/backend_test.py, test_nonviable.py) hitting the external URL. 45 of 46 tests pass (22 pre-existing unit tests in test_pricing.py also pass). All requested behaviors verified: health formula_version 1.1.0; demo seed estimate duration_multiplier 1.0 with low/high 37.0/42.0 and 3 options; Option A viable=true qty=6 price=3,000,000; no option priced below its own price_floor_low; duration affects hours (90s > 15s via /estimate); guest analyze->agreement flow; tamper-resistance (extra price/quantity fields ignored, snapshot.price == server option B price, quantity 12); unknown option_id -> 422; cross-guest -> 403; state machine approve->APPROVED, second respond -> 409, owner revoke -> REVOKED, then respond -> 410; no internal cost fields leak in snapshot and snapshot_hash + formula_version present. ONE new bug found: /api/analysis/{id}/estimate returns HTTP 500 when no quantity fits the budget (the new 'no_viable_scope' Option A path).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/analysis/{analysis_id}/estimate",
+        "issue": "HTTP 500 (TypeError) whenever Option A becomes type 'no_viable_scope' (price=None) — e.g. scope_overrides with client_budget=100000, quantity=12. scope.whatsapp_message() calls format_idr(a['price']) on Option A, and format_idr() does int(round(None)). Traceback: analysis.py:178 -> scope.py:234 -> scope.py:75. Consequence: the entire 'no viable scope / recommend declining' feature is unreachable through the API, and the 422 guard in create_agreement for non-viable options can never be exercised because the estimate never persists.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "POST /api/analyze",
+        "issue": "When the X-Guest-Id header is absent, resolve_owner() generates a random throwaway guest id, so the created analysis is silently orphaned (no client can ever fetch it, and agreement creation will 403). Consider returning the assigned guest id in the response or requiring the header."
+      },
+      {
+        "endpoint": "POST /api/agreement/{token}/respond",
+        "issue": "Legacy Indonesian actions (setuju/minta_perubahan/tanyakan_detail) are still accepted alongside the English ones. Harmless but dead surface area; confirm this is intentional."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_nonviable.py",
+    "/app/backend/tests/test_pricing.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Fix the 500 in the no_viable_scope path: make scope.format_idr()/whatsapp_message() (and decline/deal-copy copy builders) tolerate an Option A with price=None, or pick the first viable option for the WhatsApp copy and fall back to decline_message when none is viable. Then re-run /app/backend/tests/test_nonviable.py (2 tests) to confirm the 422 guard for non-viable options in create_agreement works end-to-end.",
+    "Optionally return the server-assigned guest id from POST /api/analyze when X-Guest-Id is missing."
+  ],
+  "critical_code_review_comments": [
+    "scope.format_idr() has no None guard; every caller that formats an optional price (whatsapp_message, scope_change_message, deal_copy) is a latent 500. Add an explicit None guard returning e.g. 'not available'.",
+    "scope.whatsapp_message() indexes options[0]/options[1] positionally and assumes Option A is always priced — brittle after the new viable/no_viable_scope branching. Select options by id and by viability.",
+    "build_options() sets an explicit 'viable' key only for Option A; B and C rely on create_agreement's opt.get('viable', True) default. Set 'viable': True explicitly on B and C so the contract is uniform and a future default flip cannot silently allow a non-viable option.",
+    "AgreementBody does not set model_config extra='forbid'. Tamper fields are correctly ignored today (server-side lookup), but forbidding extras would surface tampering attempts as 422 instead of silently accepting them.",
+    "respond_agreement() uses an unconditional update_one without a status precondition; two concurrent approve/request_changes calls can race past the 409/410 checks. Use a conditional filter (e.g. status not in APPROVED/REVOKED) in the update itself."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_nonviable.py"
+  ],
+  "success_rate": {"backend": "97.8% (45/46 tests passing)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "Created ephemeral guest analyses (X-Guest-Id: guest_testA_*/guest_testB_*/guest_dur_*/guest_nonviable_*) and several agreement documents in brief_analyses / scope_agreements via the public API. No seeded/production data modified.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend API suites live at /app/backend/tests/backend_test.py (20+2 tests: health, demo seed pricing, tamper resistance, state machine, misc guards) and /app/backend/tests/test_nonviable.py (no_viable_scope edge case, currently 1 fail + 1 skip due to the 500 bug). Unit tests in test_pricing.py (22) pass. Run: cd /app/backend && python -m pytest tests/ -v -p no:randomly. Only the live-AI analyze path (use_ai=true), deal-copy and scope-check were NOT tested (require an LLM key). Frontend was not tested at all.",
+  "rca_of_the_issue": "Repro: POST /api/analyze {brief: seed brief, use_ai:false} with X-Guest-Id, then POST /api/analysis/{id}/estimate with a complete cost_profile and scope_overrides {quantity:12, final_duration:45, footage_hours:3, client_budget:100000}. Root cause: scope.build_options() now returns Option A with price=None and type 'no_viable_scope' when no quantity fits the budget, but analysis._build_pricing() unconditionally calls scope.whatsapp_message(), which formats options[0]['price'] through format_idr() -> int(round(None)) -> TypeError -> 500. Mitigation: None-guard format_idr and make the copy builders skip/replace non-viable options (or short-circuit to decline_message when Option A is not viable).",
+  "test_credentials": "Not required — guest flow scoped by the X-Guest-Id header. /app/memory/test_credentials.md was not needed for this backend-only scope."
+}

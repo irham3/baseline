@@ -4,11 +4,11 @@ import { Info } from "lucide-react";
 
 export function Badge({ tone = "neutral", children, className, ...rest }) {
   const tones = {
-    green: "bg-green-soft text-green-strong",
-    amber: "bg-amber-soft text-amber",
-    danger: "bg-danger-soft text-danger",
-    neutral: "bg-black/[0.05] text-ink-soft",
-    ink: "bg-ink text-white",
+    green: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
+    amber: "bg-amber-500/15 text-amber-400 border border-amber-500/30",
+    danger: "bg-rose-500/15 text-rose-400 border border-rose-500/30",
+    neutral: "bg-white/[0.06] text-zinc-300 border border-white/10",
+    ink: "bg-white/10 text-white border border-white/15",
   };
   return (
     <span className={clsx("chip", tones[tone], className)} {...rest}>
@@ -17,11 +17,11 @@ export function Badge({ tone = "neutral", children, className, ...rest }) {
   );
 }
 
-export function DemoTag({ className, children = "Ilustrasi demo" }) {
+export function DemoTag({ className, children = "Demo data" }) {
   return (
     <span
       className={clsx(
-        "inline-flex items-center gap-1 rounded-full border border-amber/30 bg-amber-soft px-2 py-0.5 text-[11px] font-semibold text-amber",
+        "inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-400",
         className
       )}
       data-testid="demo-tag"
@@ -45,7 +45,7 @@ export function Stat({ label, value, sub, tone }) {
   return (
     <div>
       <div className="text-[13px] font-medium text-ink-faint">{label}</div>
-      <div className={clsx("mt-0.5 text-lg font-bold tracking-tight", tone === "danger" && "text-danger", tone === "green" && "text-green-strong")}>
+      <div className={clsx("mt-0.5 text-lg font-bold", tone === "danger" && "text-danger", tone === "green" && "text-green-strong")}>
         {value}
       </div>
       {sub && <div className="text-xs text-ink-faint">{sub}</div>}
@@ -59,7 +59,7 @@ export function Spinner({ size = 18 }) {
       className="inline-block animate-spin rounded-full border-2 border-current border-t-transparent"
       style={{ width: size, height: size }}
       role="status"
-      aria-label="Memuat"
+      aria-label="Loading"
     />
   );
 }
@@ -77,5 +77,23 @@ export function Toast({ show, children }) {
         {children}
       </div>
     </div>
+  );
+}
+
+export function SpotlightCard({ as: Component = "div", className, children, ...rest }) {
+  const handleMove = (event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    event.currentTarget.style.setProperty("--spot-x", `${event.clientX - rect.left}px`);
+    event.currentTarget.style.setProperty("--spot-y", `${event.clientY - rect.top}px`);
+  };
+
+  return (
+    <Component
+      className={clsx("spotlight-card", className)}
+      onPointerMove={handleMove}
+      {...rest}
+    >
+      {children}
+    </Component>
   );
 }

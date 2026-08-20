@@ -20,6 +20,12 @@ class GoogleSessionBody(BaseModel):
     session_id: str
 
 
+class GoogleAuthBody(BaseModel):
+    credential: Optional[str] = None
+    session_id: Optional[str] = None
+    access_token: Optional[str] = None
+
+
 class AnalyzeBody(BaseModel):
     brief: str
     redact: bool = False
@@ -56,9 +62,10 @@ class ScopeCheckBody(BaseModel):
 
 
 class AgreementBody(BaseModel):
-    option: dict
-    project_title: str
-    client_name: Optional[str] = None
+    model_config = {"extra": "forbid"}
+    option_id: str = Field(min_length=1, max_length=8)
+    project_title: str = Field(min_length=1, max_length=160)
+    client_name: Optional[str] = Field(default=None, max_length=120)
 
 
 class AgreementResponseBody(BaseModel):
@@ -68,7 +75,7 @@ class AgreementResponseBody(BaseModel):
 
 class DemoAgreementBody(BaseModel):
     option_id: str = "B"
-    project_title: str = "Campaign 12 Reels — Baseline (demo)"
+    project_title: str = "Campaign 12 Reels - Baseline (demo)"
 
 
 class ProjectBody(BaseModel):
@@ -83,4 +90,4 @@ class ProjectBody(BaseModel):
 
 class AnalyticsBody(BaseModel):
     event: str
-    props: dict = {}
+    props: dict = Field(default_factory=dict)

@@ -1,0 +1,53 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+Allow: /judge
+Allow: /analyze
+Allow: /login
+Allow: /s/
+Allow: /agreement/
+Allow: /llms.txt
+Allow: /pricing.md
+Disallow: /api/
+Disallow: /app
+
+# AI Search & Answer Engine Optimization
+User-agent: GPTBot
+Allow: /
+Allow: /llms.txt
+Allow: /pricing.md
+
+User-agent: ChatGPT-User
+Allow: /
+Allow: /llms.txt
+Allow: /pricing.md
+
+User-agent: PerplexityBot
+Allow: /
+Allow: /llms.txt
+Allow: /pricing.md
+
+User-agent: ClaudeBot
+Allow: /
+Allow: /llms.txt
+Allow: /pricing.md
+
+User-agent: anthropic-ai
+Allow: /
+Allow: /llms.txt
+Allow: /pricing.md
+
+User-agent: Google-Extended
+Allow: /
+Allow: /llms.txt
+Allow: /pricing.md
+
+User-agent: Bingbot
+Allow: /
+Allow: /llms.txt
+Allow: /pricing.md
+
+User-agent: CCBot
+Allow: /
+
+Sitemap: https://baselinework.app/sitemap.xml

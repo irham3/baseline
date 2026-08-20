@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from typing import Optional
 
-FORMULA_VERSION = "1.0.0"
+FORMULA_VERSION = "1.1.0"
 
 # Default daily productive capacity (hours) used only for deadline feasibility checks.
 DAILY_CAPACITY_HOURS = 6.0
@@ -18,6 +18,29 @@ DAILY_CAPACITY_HOURS = 6.0
 def _require(cond: bool, msg: str) -> None:
     if not cond:
         raise ValueError(msg)
+
+
+# --------------------------------------------------------------------------
+# Final-duration effort model
+# --------------------------------------------------------------------------
+# Editing effort scales with the final length of each video. These are conservative,
+# CONFIGURABLE operational assumptions (not universal market truth). 45s is the neutral
+# reference point (multiplier 1.0); shorter videos take less, longer videos take more.
+DEFAULT_FINAL_DURATION_SECONDS = 45
+DURATION_BANDS = [(15, 0.80), (30, 0.90), (60, 1.00), (90, 1.15), (120, 1.30)]
+DURATION_BAND_OVER = 1.50  # applied when final duration exceeds the largest band
+
+
+def duration_multiplier(final_duration_seconds):
+    """Deterministic per-video editing multiplier from final duration. Returns (multiplier, band_cap)."""
+    d = final_duration_seconds if final_duration_seconds not in (None, 0, "") else DEFAULT_FINAL_DURATION_SECONDS
+    d = float(d)
+    _require(d > 0, "Final duration must be greater than 0")
+    for cap, mult in DURATION_BANDS:
+        if d <= cap:
+            return mult, cap
+    return DURATION_BAND_OVER, None
+
 
 
 # --------------------------------------------------------------------------
@@ -83,6 +106,9 @@ def estimate_hours(scope: dict) -> dict:
         _require(low <= high, f"Invalid ordering for {label}")
         items.append({"label": label, "low": round(low, 3), "high": round(high, 3)})
 
+    def plural(value: int, singular: str, plural_label: str | None = None) -> str:
+        return singular if value == 1 else (plural_label or f"{singular}s")
+
     # Per project
     add("Intake & asset management", *TASK_UNITS["intake"])
 
@@ -119,13 +145,22 @@ def estimate_hours(scope: dict) -> dict:
         base_low += TASK_UNITS["motion_custom"][0]
         base_high += TASK_UNITS["motion_custom"][1]
         parts.append("motion graphics")
-    add(f"Editing × {q} video ({', '.join(parts)})", base_low * q, base_high * q)
+    # Final duration scales per-video editing effort (deterministic, visible).
+    dmult, band_cap = duration_multiplier(scope.get("final_duration"))
+    used_duration = scope.get("final_duration") or DEFAULT_FINAL_DURATION_SECONDS
+    base_low *= dmult
+    base_high *= dmult
+    add(
+        f"Editing x {q} {plural(q, 'video')} ({', '.join(parts)}; {used_duration:g}s @ {dmult:g}x duration)",
+        base_low * q,
+        base_high * q,
+    )
 
     # Communication & approval
     ac = int(scope.get("approver_count") or 1)
     _require(ac >= 1, "Approver count must be at least 1")
     add(
-        f"Communication & approval ({ac} approver)",
+        f"Communication & approval ({ac} {plural(ac, 'approver')})",
         ac * TASK_UNITS["approver_each"][0],
         ac * TASK_UNITS["approver_each"][1],
     )
@@ -134,17 +169,23 @@ def estimate_hours(scope: dict) -> dict:
     rr = scope.get("revision_rounds")
     if rr is None:
         rr_used = ASSUMED_UNLIMITED_REVISION_ROUNDS
-        label = f"Revision rounds × {rr_used} (assumed; not bounded in brief)"
+        label = f"Revision rounds x {rr_used} (assumed; not bounded in brief)"
     else:
         rr_used = int(rr)
         _require(rr_used >= 0, "Revision rounds must be non-negative")
-        label = f"Revision rounds × {rr_used}"
+        label = f"Revision rounds x {rr_used}"
     if rr_used > 0:
         add(label, rr_used * TASK_UNITS["revision_per_round"][0], rr_used * TASK_UNITS["revision_per_round"][1])
 
     low = sum(i["low"] for i in items)
     high = sum(i["high"] for i in items)
-    return {"low": round(low, 1), "high": round(high, 1), "breakdown": items}
+    return {
+        "low": round(low, 1),
+        "high": round(high, 1),
+        "breakdown": items,
+        "duration_seconds": used_duration,
+        "duration_multiplier": dmult,
+    }
 
 
 # --------------------------------------------------------------------------
@@ -223,7 +264,7 @@ def required_days(hours_low: float, daily_capacity: float = DAILY_CAPACITY_HOURS
 
 
 def risk_triggers(scope: dict, estimate: dict, price: dict) -> dict:
-    """Explicit rule triggers only — no arbitrary score."""
+    """Explicit rule triggers only; no arbitrary score."""
     triggers: list[dict] = []
 
     budget = scope.get("client_budget")
@@ -231,16 +272,16 @@ def risk_triggers(scope: dict, estimate: dict, price: dict) -> dict:
         triggers.append({
             "code": "budget_below_break_even",
             "severity": "high",
-            "label": "Budget di bawah break-even",
-            "detail": f"Budget klien (Rp{budget:,.0f}) lebih rendah dari break-even (mulai Rp{price['break_even_low']:,.0f}).".replace(",", "."),
+            "label": "Budget below break-even",
+            "detail": f"Client budget (IDR {budget:,.0f}) is below break-even (from IDR {price['break_even_low']:,.0f}).",
         })
 
     if scope.get("revision_rounds") is None:
         triggers.append({
             "code": "unlimited_revisions",
             "severity": "high",
-            "label": "Revisi tidak dibatasi",
-            "detail": "Brief menyebut revisi tanpa batas atau tidak terdefinisi.",
+            "label": "Unbounded revisions",
+            "detail": "The brief mentions revisions without a clear limit or definition.",
         })
 
     if scope.get("deadline_working_days") is not None:
@@ -249,8 +290,8 @@ def risk_triggers(scope: dict, estimate: dict, price: dict) -> dict:
             triggers.append({
                 "code": "rush_deadline",
                 "severity": "high",
-                "label": "Deadline lebih pendek dari kapasitas",
-                "detail": f"Perlu ± {need} hari kerja untuk batas bawah estimasi, deadline hanya {scope['deadline_working_days']} hari.",
+                "label": "Deadline shorter than capacity",
+                "detail": f"The low estimate needs about {need} working days, but the deadline is {scope['deadline_working_days']} days.",
             })
 
     unresolved = int(scope.get("unresolved_major_count") or 0)
@@ -258,24 +299,25 @@ def risk_triggers(scope: dict, estimate: dict, price: dict) -> dict:
         triggers.append({
             "code": "many_unresolved",
             "severity": "medium",
-            "label": f"{unresolved} variabel harga belum jelas",
-            "detail": "Tiga atau lebih variabel harga utama belum diselesaikan.",
+            "label": f"{unresolved} pricing variables unresolved",
+            "detail": "Three or more key pricing variables are still unresolved.",
         })
 
     if not scope.get("footage_preselected", False) and scope.get("footage_available"):
         triggers.append({
             "code": "asset_dependency",
             "severity": "medium",
-            "label": "Mulai bergantung pada aset",
-            "detail": "Footage belum dipilih; pemilihan menambah waktu dan menggeser tanggal mulai.",
+            "label": "Start depends on assets",
+            "detail": "Footage is not selected yet; selection adds time and can move the start date.",
         })
 
     if int(scope.get("approver_count") or 1) >= 2:
+        approvers = int(scope.get("approver_count") or 1)
         triggers.append({
             "code": "multiple_approvers",
             "severity": "medium",
-            "label": f"{scope.get('approver_count')} approver",
-            "detail": "Banyak approver menambah komunikasi dan potensi revisi.",
+            "label": f"{approvers} approvers",
+            "detail": "Multiple approvers add communication time and revision risk.",
         })
 
     severities = {t["severity"] for t in triggers}
@@ -291,13 +333,13 @@ def risk_triggers(scope: dict, estimate: dict, price: dict) -> dict:
 def confidence_level(scope_pct: int, has_history: bool, unresolved_major: int) -> dict:
     if scope_pct >= 85 and unresolved_major == 0 and has_history:
         level = "high"
-        reason = "Field kritis selesai dan ada riwayat relevan."
+        reason = "Critical fields are resolved and relevant history exists."
     elif scope_pct >= 60 and unresolved_major <= 2:
         level = "medium"
-        reason = "Sebagian besar field terjawab, tetapi dependency atau riwayat masih terbatas."
+        reason = "Most fields are answered, but dependencies or history are still limited."
     else:
         level = "low"
-        reason = "Variabel penting masih kosong atau belum ada riwayat relevan."
+        reason = "Important variables are still missing or there is no relevant history yet."
     return {"level": level, "reason": reason}
 
 

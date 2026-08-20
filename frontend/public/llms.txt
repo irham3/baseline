@@ -1,0 +1,24 @@
+# Baseline Work
+> Pre-deal scope checks and price floor calculation for video creators and creative freelancers.
+
+## About Baseline
+Baseline Work stops creative freelancers (specifically short-form video editors, motion designers, and creative directors) from underquoting, absorbing scope creep, and accepting unpriced client assumptions. When you paste an incoming client brief, Baseline maps missing parameters, calculates a mathematical price floor from real operating overhead, and formats 3-option deal proposals and lightweight pre-deal scope agreements.
+
+## Core Capabilities
+- **Brief Analysis & Hidden Scope Detection**: Parses unstructured client text to flag unpriced variables (aspect ratios, raw footage organization, turnaround speed, revision limits, subtitles, motion complexity).
+- **Price Floor Calculator**: Computes minimum hourly rate from monthly take-home pay, business overhead, emergency reserves, and billable utilization ratios.
+- **3-Option Deal Proposals**: Structures options (Budget-fit / Core / Safety-first) to prevent all-or-nothing pricing traps.
+- **Pre-Deal Scope Agreements**: Generates lightweight, mobile-friendly deal sign-off sheets (`/s/:token`) for WhatsApp or email before creative work begins.
+- **Judge Mode Simulation**: A 90-second interactive workflow showing how unpriced scope turns profitable proposals into losses.
+
+## Target Audience
+- Short-form video editors (TikTok, Instagram Reels, YouTube Shorts)
+- Motion designers and commercial video creators
+- Independent digital creative freelancers
+
+## Key URLs & Resources
+- Homepage: https://baselinework.app/
+- Interactive Demo (Judge Mode): https://baselinework.app/judge
+- Brief Analyzer: https://baselinework.app/analyze
+- User Sign In: https://baselinework.app/login
+- Pricing Details: https://baselinework.app/pricing.md

@@ -1,4 +1,4 @@
-"""Baseline API entrypoint — assembles routers, CORS, health, analytics, startup."""
+"""Baseline API entrypoint: assembles routers, CORS, health, analytics, startup."""
 from __future__ import annotations
 
 from dotenv import load_dotenv
@@ -54,9 +54,13 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
-    await db.users.create_index("email", unique=True)
-    await db.users.create_index("user_id", unique=True)
-    await db.user_sessions.create_index("session_token")
-    await db.scope_agreements.create_index("token", unique=True)
-    await db.brief_analyses.create_index("analysis_id", unique=True)
-    await db.projects.create_index([("owner_id", 1), ("project_id", 1)])
+    try:
+        await db.users.create_index("email", unique=True)
+        await db.users.create_index("user_id", unique=True)
+        await db.user_sessions.create_index("session_token")
+        await db.scope_agreements.create_index("token", unique=True)
+        await db.brief_analyses.create_index("analysis_id", unique=True)
+        await db.projects.create_index([("owner_id", 1), ("project_id", 1)])
+    except Exception as e:
+        import logging
+        logging.getLogger("uvicorn.error").warning(f"Index creation skipped/failed: {e}")
