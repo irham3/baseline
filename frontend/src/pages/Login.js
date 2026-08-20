@@ -171,6 +171,11 @@ export default function Login() {
                   <span>{googleLoading ? "Signing in with Google..." : "Continue with Google"}</span>
                 </button>
               )}
+              {!GOOGLE_CLIENT_ID && !googleLoading && (
+                <p className="mt-1.5 text-center text-[11px] text-ink-faint" data-testid="google-redirect-notice">
+                  You'll be redirected to a separate page to complete Google sign-in.
+                </p>
+              )}
             </div>
 
             <div className="my-5 flex items-center gap-3 text-xs text-ink-faint">
