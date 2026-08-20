@@ -67,6 +67,41 @@ def test_heuristic_fields_have_verbatim_quotes_only():
             assert f["source_quote"] in "Butuh 10 reels, budget 5jt, revisi 2x"
 
 
+def _field(result, name):
+    return next(f for f in result["fields"] if f["name"] == name)
+
+
+def test_heuristic_extracts_budget_with_possessive_suffix():
+    # Common Indonesian colloquial phrasing: "budgetnya <amount>" glued together,
+    # no "Rp" prefix and no space between "budget" and its possessive suffix.
+    result = ai_service.extract_scope_heuristic("Butuh 5 video, budgetnya 2.5 juta ya")
+    f = _field(result, "client_budget")
+    assert f["status"] == "stated"
+    assert f["value"] == 2_500_000
+
+
+def test_heuristic_extracts_revision_count_revisi_word_first():
+    # "revisi maksimal 2x" (revisi word before the number) as opposed to "2x revisi".
+    result = ai_service.extract_scope_heuristic("5 video, revisi maksimal 2x aja ya")
+    f = _field(result, "revision_rounds")
+    assert f["status"] == "stated"
+    assert f["value"] == 2
+
+
+def test_heuristic_extracts_final_duration_seconds():
+    result = ai_service.extract_scope_heuristic("Durasi masing-masing sekitar 30 detik untuk 5 video")
+    f = _field(result, "final_duration")
+    assert f["status"] == "stated"
+    assert f["value"] == 30.0
+
+
+def test_heuristic_extracts_final_duration_minutes_as_seconds():
+    result = ai_service.extract_scope_heuristic("Video panjangnya sekitar 2 menit")
+    f = _field(result, "final_duration")
+    assert f["status"] == "stated"
+    assert f["value"] == 120.0
+
+
 def test_malformed_llm_json_falls_back_gracefully(monkeypatch):
     class FakeChat:
         def __init__(self, *a, **kw):

@@ -158,6 +158,21 @@ def test_every_priced_option_is_at_or_above_its_own_floor():
             assert opt["price"] >= opt["price_floor_low"]
 
 
+def test_deliverable_copy_reflects_actual_final_duration_not_a_hardcoded_value():
+    scope = {**scope_mod.resolved_seed_scope(), "final_duration": 30}
+    opts = scope_mod.build_options(scope, 100000, 0.20, 3000000)
+    b = next(o for o in opts if o["id"] == "B")
+    assert b["final_duration"] == 30
+    line = scope_mod._deliverable_line(b)
+    assert "30 seconds" in line
+    assert "45 seconds" not in line
+
+    snapshot = scope_mod.agreement_snapshot(b, "Test Project")
+    joined = " ".join(snapshot["deliverables"])
+    assert "30 seconds" in joined
+    assert "45 seconds" not in joined
+
+
 def test_options_carry_a_timeline_trace():
     opts = scope_mod.build_options(scope_mod.resolved_seed_scope(), 100000, 0.20, 3000000)
     for opt in opts:

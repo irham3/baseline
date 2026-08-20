@@ -184,6 +184,7 @@ def build_options(scope: dict, cost_per_hour: float, target_margin: float, clien
             "title": "No viable scope at this budget",
             "price": None,
             "quantity": 0,
+            "final_duration": scope.get("final_duration"),
             "timeline_days": None,
             "timeline_trace": None,
             "revision_rounds": 0,
@@ -210,6 +211,7 @@ def build_options(scope: dict, cost_per_hour: float, target_margin: float, clien
             "title": "Keep budget, reduce scope",
             "price": int(round(client_budget)),
             "quantity": chosen_qty,
+            "final_duration": scope.get("final_duration"),
             "timeline_days": a_timeline["total_days"],
             "timeline_trace": a_timeline["trace"],
             "revision_rounds": 1,
@@ -240,6 +242,7 @@ def build_options(scope: dict, cost_per_hour: float, target_margin: float, clien
         "title": "Keep scope, normal timeline",
         "price": b_price,
         "quantity": int(scope.get("quantity") or 0),
+        "final_duration": scope.get("final_duration"),
         "timeline_days": b_timeline["total_days"],
         "timeline_trace": b_timeline["trace"],
         "revision_rounds": b_scope["revision_rounds"],
@@ -270,6 +273,7 @@ def build_options(scope: dict, cost_per_hour: float, target_margin: float, clien
         "title": "Keep scope, rush premium",
         "price": rush_price,
         "quantity": int(scope.get("quantity") or 0),
+        "final_duration": scope.get("final_duration"),
         "timeline_days": c_timeline["total_days"],
         "timeline_trace": c_timeline["trace"],
         "revision_rounds": 1,
@@ -289,8 +293,13 @@ def build_options(scope: dict, cost_per_hour: float, target_margin: float, clien
 # --------------------------------------------------------------------------
 # English copy templates (deterministic; fully editable client-side)
 # --------------------------------------------------------------------------
+def _duration_phrase(opt: dict) -> str:
+    d = opt.get("final_duration")
+    return f"up to {int(round(float(d)))} seconds each" if d else "final duration to be confirmed"
+
+
 def _deliverable_line(opt: dict) -> str:
-    line = f"{opt['quantity']} vertical videos (up to 45 seconds each)"
+    line = f"{opt['quantity']} vertical videos ({_duration_phrase(opt)})"
     if opt.get("subtitles"):
         line += ", subtitles"
     if opt.get("footage_selection_included"):
@@ -449,7 +458,7 @@ AGREEMENT_SNAPSHOT_VERSION = "1.0.0"
 def agreement_snapshot(opt: dict, project_title: str, client_name: Optional[str] = None, is_demo: bool = False) -> dict:
     """Build the client-facing immutable snapshot from a selected option. No internal cost data."""
     deliverables = [
-        f"{opt.get('quantity')} vertical videos (up to 45 seconds, 9:16)",
+        f"{opt.get('quantity')} vertical videos ({_duration_phrase(opt)}, 9:16)",
         "Subtitles" if opt.get("subtitles", True) else None,
         "Footage selection" if opt.get("footage_selection_included") else None,
         revision_phrase(opt.get("revision_rounds"), consolidated=True),

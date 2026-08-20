@@ -381,7 +381,9 @@ def _heuristic_extract_scope(brief: str) -> dict:
         fields.append({"name": "platform", "value": "Reels / TikTok", "status": "inferred", "source_quote": None, "confidence": 0.6})
 
     # 2. Budget
-    b_match = re.search(r"(?:budget|anggaran|biaya|dana|fee|rate)\s*(?:sekitar|kira-kira|adalah|di|:)?\s*(?:rp\.?\s*)?(\d+(?:[.,]\d+)?\s*(?:juta|jt|ribu|rb|\d{5,}))", brief, re.IGNORECASE)
+    # \w* after the keyword absorbs common Indonesian possessive suffixes glued
+    # directly to the word (e.g. "budgetnya", "dananya") with no space before the amount.
+    b_match = re.search(r"(?:budget|anggaran|biaya|dana|fee|rate)\w*\s*(?:sekitar|kira-kira|adalah|cuma|hanya|di|:)?\s*(?:rp\.?\s*)?(\d+(?:[.,]\d+)?\s*(?:juta|jt|ribu|rb|\d{5,}))", brief, re.IGNORECASE)
     if not b_match:
         b_match = re.search(r"(?:rp\.?\s*)(\d+(?:[.,]\d+)?\s*(?:juta|jt|ribu|rb|\d{5,}))", brief, re.IGNORECASE)
     if b_match:
@@ -415,7 +417,14 @@ def _heuristic_extract_scope(brief: str) -> dict:
             "inference_explanation": "Client requested unlimited/unbounded revisions."
         })
     else:
+        # "2x revisi" / "revisi 2 kali" (number-first) or the more common Indonesian
+        # "revisi maksimal 2x" / "revisinya cuma 2x" (revisi-word-first) order.
         num_rev = re.search(r"(\d+)\s*(?:kali|x|round)?\s*revisi", brief, re.IGNORECASE)
+        if not num_rev:
+            num_rev = re.search(
+                r"revisi\w*\s*(?:maksimal|max|paling\s+banyak|cuma|hanya)?\s*(\d+)\s*(?:kali|x|round)?",
+                brief, re.IGNORECASE,
+            )
         if num_rev:
             fields.append({
                 "name": "revision_rounds", "value": int(num_rev.group(1)), "status": "stated",
@@ -434,8 +443,21 @@ def _heuristic_extract_scope(brief: str) -> dict:
     else:
         fields.append({"name": "footage_available", "value": True, "status": "inferred", "source_quote": None, "confidence": 0.6})
 
+    # Final duration ("30 detik", "durasi 1 menit", "45 second")
+    dur_match = re.search(r"(\d+(?:[.,]\d+)?)\s*(detik|second|sec|menit|minute|min)\b", brief, re.IGNORECASE)
+    if dur_match:
+        quote = dur_match.group(0)
+        num = float(dur_match.group(1).replace(",", "."))
+        unit = dur_match.group(2).lower()
+        seconds = num * 60 if unit in ("menit", "minute", "min") else num
+        fields.append({
+            "name": "final_duration", "value": seconds, "status": "stated",
+            "source_quote": quote, "confidence": 0.9, "inference_explanation": None
+        })
+    else:
+        fields.append({"name": "final_duration", "value": None, "status": "missing", "source_quote": None, "confidence": 0.5})
+
     # Other required short-form fields marked explicitly
-    fields.append({"name": "final_duration", "value": None, "status": "missing", "source_quote": None, "confidence": 0.5})
     fields.append({"name": "footage_hours", "value": None, "status": "missing", "source_quote": None, "confidence": 0.5})
     fields.append({"name": "footage_preselected", "value": False, "status": "inferred", "source_quote": None, "confidence": 0.6})
     fields.append({"name": "scripting", "value": False, "status": "inferred", "source_quote": None, "confidence": 0.6})
