@@ -135,7 +135,11 @@ export default function Agreement() {
             <div className="card mt-5 flex items-center gap-3 p-5" data-testid="agreement-answered">
               <CheckCircle2 className="text-green" size={22} />
               <p className="font-semibold text-ink">
-                {data.status === "APPROVED" ? "Thank you. This offer has been approved." : "Your change request has been sent. The freelancer will contact you."}
+                {data.status === "APPROVED"
+                  ? "Thank you. This offer has been approved."
+                  : done === "ask_question"
+                  ? "Your question has been sent. The freelancer will get back to you."
+                  : "Your change request has been sent. The freelancer will contact you."}
               </p>
             </div>
           ) : expired ? (
