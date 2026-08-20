@@ -81,11 +81,10 @@ async def analyze(body: AnalyzeBody, request: Request):
         redaction = scope_mod.redact_pii(brief)
         brief = redaction["text"]
 
-    is_seed_demo = (
-        not body.use_ai
-        or brief.strip() in getattr(scope_mod, "SEED_BRIEFS", {scope_mod.SEED_BRIEF})
-        or brief.strip() == scope_mod.SEED_BRIEF
-    )
+    # The seeded demo is keyed by matching the exact seed brief text, not by the
+    # use_ai flag -- use_ai=False means "analyze my real text deterministically",
+    # not "show the canned demo regardless of what I typed".
+    is_seed_demo = brief.strip() in getattr(scope_mod, "SEED_BRIEFS", {scope_mod.SEED_BRIEF})
 
     seed = None
     if is_seed_demo:
@@ -94,7 +93,10 @@ async def analyze(body: AnalyzeBody, request: Request):
             "fields": seed["fields"],
             "ambiguities": [],
             "clarifications": seed["clarifications"],
+            "provenance": "seed",
         }
+    elif not body.use_ai:
+        extraction = ai_service.extract_scope_heuristic(brief)
     else:
         try:
             extraction = await ai_service.extract_scope(brief)
@@ -105,6 +107,7 @@ async def analyze(body: AnalyzeBody, request: Request):
     doc = {
         "analysis_id": analysis_id, "owner_type": owner_type, "owner_id": owner_id,
         "brief": brief, "is_demo": is_seed_demo, "redaction": redaction,
+        "provenance": extraction.get("provenance", "heuristic_fallback"),
         "state": "COMPLETED" if seed else "NEEDS_CLARIFICATION",
         "fields": extraction["fields"],
         "ambiguities": extraction.get("ambiguities", []),

@@ -7,8 +7,9 @@ load_dotenv()
 import os
 import uuid
 
-from fastapi import FastAPI, APIRouter, Request
+from fastapi import FastAPI, APIRouter, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 import ai_service
 import pricing
@@ -18,7 +19,23 @@ from routers import auth, analysis, agreement, account
 
 app = FastAPI(title="Baseline API")
 
+
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    # Deterministic pricing/scope validation (pricing._require and friends) raises
+    # plain ValueError for invalid input. Surface it as a controlled 4xx instead of an
+    # unhandled 500.
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
 misc = APIRouter(prefix="/api")
+
+ALLOWED_ANALYTICS_EVENTS = {
+    "estimate_viewed", "option_selected", "whatsapp_copied", "formula_opened",
+    "agreement_created", "agreement_viewed", "agreement_approved",
+    "agreement_change_requested", "project_actual_submitted",
+}
+MAX_ANALYTICS_PROPS_BYTES = 2000
 
 
 @misc.get("/health")
@@ -37,6 +54,11 @@ async def health():
 
 @misc.post("/analytics")
 async def track(body: AnalyticsBody, request: Request):
+    if body.event not in ALLOWED_ANALYTICS_EVENTS:
+        raise HTTPException(status_code=422, detail="Unknown analytics event.")
+    import json as _json
+    if len(_json.dumps(body.props)) > MAX_ANALYTICS_PROPS_BYTES:
+        raise HTTPException(status_code=422, detail="Analytics payload too large.")
     owner_type, owner_id = await resolve_owner(request)
     await db.analytics_events.insert_one({
         "event_id": uuid.uuid4().hex, "event": body.event, "props": body.props,
@@ -60,6 +82,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["X-Frame-Options"] = "DENY"
+    if IS_PRODUCTION:
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    return response
 
 
 @app.on_event("startup")

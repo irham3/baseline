@@ -10,6 +10,7 @@ export default function BriefInputBox() {
   const [brief, setBrief] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState(null);
+  const [useAi, setUseAi] = useState(true);
   const navigate = useNavigate();
 
   const handleAnalyze = async () => {
@@ -24,7 +25,7 @@ export default function BriefInputBox() {
     setError(null);
     setAnalyzing(true);
     try {
-      const res = await client.post("/analyze", { brief, use_ai: true, redact: true });
+      const res = await client.post("/analyze", { brief, use_ai: useAi, redact: true });
       navigate(`/analysis/${res.data.analysis_id}`);
     } catch (err) {
       setError(err.response?.data?.detail || "Failed to connect to AI engine.");
@@ -70,10 +71,23 @@ export default function BriefInputBox() {
           data-testid="brief-textarea"
         />
 
+        <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/5 pt-3">
+          <label className="flex cursor-pointer items-center gap-2 text-[11px] font-semibold text-zinc-400" data-testid="use-ai-toggle">
+            <input
+              type="checkbox"
+              checked={!useAi}
+              onChange={(e) => setUseAi(!e.target.checked)}
+              className="h-3.5 w-3.5 accent-emerald-500"
+            />
+            Analyze without AI (deterministic only)
+          </label>
+        </div>
+
         <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-white/5 pt-4">
           <p className="text-[11px] text-zinc-500 max-w-sm leading-relaxed">
-            Baseline AI automatically extracts deliverable volume, hidden assumptions, requested revisions, and budget constraints.
-            Contact details are redacted before analysis. If the AI is unavailable, a deterministic fallback extracts the same brief without it.
+            {useAi
+              ? "Baseline AI automatically extracts deliverable volume, hidden assumptions, requested revisions, and budget constraints. Contact details are redacted before analysis. If the AI is unavailable, a deterministic fallback extracts the same brief without it."
+              : "Deterministic extraction only — no AI call is made. Coverage is more limited than AI extraction, but every value is still traceable to a quote in your brief."}
           </p>
 
           <div className="flex items-center gap-3 w-full sm:w-auto">

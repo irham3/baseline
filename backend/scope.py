@@ -49,12 +49,19 @@ def compute_scope_completeness(overrides: dict) -> dict:
 
 
 # --------------------------------------------------------------------------
-# PII redaction
+# PII redaction (best-effort, not guaranteed complete -- see product copy)
 # --------------------------------------------------------------------------
 _EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
 # Indonesian mobile numbers: +62/62/0 followed by 8xx and 7-12 more digits, allowing
 # spaces/dashes as separators.
 _PHONE_RE = re.compile(r"(?:\+62|62|0)8[\d\-\s]{7,13}\d")
+_URL_RE = re.compile(r"\b(?:https?://|www\.)\S+", re.IGNORECASE)
+# Social handles: @username (Instagram/Twitter/Telegram style). Applied after email
+# redaction so an email's local part is never mistaken for a handle.
+_HANDLE_RE = re.compile(r"(?<!\w)@[A-Za-z0-9_.]{2,30}\b")
+# Long contiguous digit runs (10-16 digits) that look like a bank/account number.
+# Shorter runs (phone numbers, budgets like "3000000") are left alone.
+_BANK_ACCOUNT_RE = re.compile(r"(?<!\d)\d{10,16}(?!\d)")
 
 
 def redact_pii(text: str) -> dict:
@@ -64,7 +71,25 @@ def redact_pii(text: str) -> dict:
     phones = len(_PHONE_RE.findall(redacted))
     redacted = _PHONE_RE.sub("[phone redacted]", redacted)
 
-    return {"text": redacted, "emails_found": emails, "phones_found": phones, "total": emails + phones}
+    urls = len(_URL_RE.findall(redacted))
+    redacted = _URL_RE.sub("[link redacted]", redacted)
+
+    handles = len(_HANDLE_RE.findall(redacted))
+    redacted = _HANDLE_RE.sub("[handle redacted]", redacted)
+
+    accounts = len(_BANK_ACCOUNT_RE.findall(redacted))
+    redacted = _BANK_ACCOUNT_RE.sub("[account number redacted]", redacted)
+
+    total = emails + phones + urls + handles + accounts
+    return {
+        "text": redacted,
+        "emails_found": emails,
+        "phones_found": phones,
+        "urls_found": urls,
+        "handles_found": handles,
+        "accounts_found": accounts,
+        "total": total,
+    }
 
 
 # --------------------------------------------------------------------------

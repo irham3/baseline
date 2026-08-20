@@ -266,3 +266,40 @@ def test_redaction_phone_and_email():
     assert "owner@brand.co.id" not in out["text"]
     assert out["phones_found"] == 1
     assert out["emails_found"] == 1
+
+
+def test_redaction_url():
+    text = "Lihat portofolio di https://myportfolio.com/reels dan www.example.co.id"
+    out = scope_mod.redact_pii(text)
+    assert "myportfolio.com" not in out["text"]
+    assert "example.co.id" not in out["text"]
+    assert out["urls_found"] == 2
+
+
+def test_redaction_social_handle():
+    text = "DM aja ke @brand_official atau @editor.reels untuk detail"
+    out = scope_mod.redact_pii(text)
+    assert "@brand_official" not in out["text"]
+    assert "@editor.reels" not in out["text"]
+    assert out["handles_found"] == 2
+
+
+def test_redaction_bank_account_number():
+    text = "Transfer ke rekening 1234567890123 BCA ya"
+    out = scope_mod.redact_pii(text)
+    assert "1234567890123" not in out["text"]
+    assert out["accounts_found"] == 1
+
+
+def test_redaction_does_not_over_redact_short_budget_numbers():
+    text = "Budget 3000000 rupiah"
+    out = scope_mod.redact_pii(text)
+    assert "3000000" in out["text"]
+    assert out["accounts_found"] == 0
+
+
+def test_redaction_combined_total():
+    text = "Halo, hubungi 081234567890, email saya test@brand.id, IG @brandbaru, web https://brand.id"
+    out = scope_mod.redact_pii(text)
+    assert out["total"] == 4
+    assert out["total"] == (out["emails_found"] + out["phones_found"] + out["urls_found"] + out["handles_found"] + out["accounts_found"])

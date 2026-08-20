@@ -26,21 +26,25 @@ class GoogleAuthBody(BaseModel):
     access_token: Optional[str] = None
 
 
+# Max length for a pasted client brief -- generous for a WhatsApp chat dump, but bounded.
+MAX_BRIEF_LENGTH = 6000
+
+
 class AnalyzeBody(BaseModel):
-    brief: str
+    brief: str = Field(max_length=MAX_BRIEF_LENGTH)
     redact: bool = False
     use_ai: bool = True
 
 
 class CostProfileBody(BaseModel):
     mode: str = "guided"
-    target_take_home: Optional[float] = None
-    monthly_overhead: Optional[float] = None
-    monthly_reserve: Optional[float] = None
-    total_working_hours: Optional[float] = None
-    billable_utilization: Optional[float] = None
-    cost_per_hour: Optional[float] = None
-    target_margin: float = 0.20
+    target_take_home: Optional[float] = Field(default=None, ge=0, le=1_000_000_000)
+    monthly_overhead: Optional[float] = Field(default=None, ge=0, le=1_000_000_000)
+    monthly_reserve: Optional[float] = Field(default=None, ge=0, le=1_000_000_000)
+    total_working_hours: Optional[float] = Field(default=None, gt=0, le=744)
+    billable_utilization: Optional[float] = Field(default=None, gt=0, le=1)
+    cost_per_hour: Optional[float] = Field(default=None, ge=0, le=100_000_000)
+    target_margin: float = Field(default=0.20, ge=0, lt=1)
     save: bool = False
 
 
@@ -52,11 +56,11 @@ class EstimateBody(BaseModel):
 
 class DealCopyBody(BaseModel):
     scope_overrides: dict
-    options: list[dict]
+    options: list[dict] = Field(min_length=2, max_length=3)
 
 
 class ScopeCheckBody(BaseModel):
-    new_request: str
+    new_request: str = Field(min_length=1, max_length=2000)
     delta: Optional[dict] = None
     cost_profile: Optional[CostProfileBody] = None
 
@@ -81,15 +85,15 @@ class DemoAgreementBody(BaseModel):
 
 
 class ProjectBody(BaseModel):
-    project_name: str
-    estimated_hours: float
-    actual_hours: float
-    expected_revisions: int = 0
-    actual_revisions: int = 0
-    scope_note: Optional[str] = None
-    deviation_reason: Optional[str] = None
+    project_name: str = Field(min_length=1, max_length=200)
+    estimated_hours: float = Field(gt=0, le=10_000)
+    actual_hours: float = Field(gt=0, le=10_000)
+    expected_revisions: int = Field(default=0, ge=0, le=1000)
+    actual_revisions: int = Field(default=0, ge=0, le=1000)
+    scope_note: Optional[str] = Field(default=None, max_length=1000)
+    deviation_reason: Optional[str] = Field(default=None, max_length=1000)
 
 
 class AnalyticsBody(BaseModel):
-    event: str
+    event: str = Field(min_length=1, max_length=64)
     props: dict = Field(default_factory=dict)

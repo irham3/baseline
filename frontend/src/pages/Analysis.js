@@ -177,7 +177,13 @@ export default function Analysis() {
         </button>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-extrabold text-ink">Brief Map</h1>
-          {analysis.is_demo && <Badge tone="amber">Demo</Badge>}
+          {analysis.is_demo && <Badge tone="amber" data-testid="provenance-demo">Demo data</Badge>}
+          {!analysis.is_demo && analysis.provenance === "ai" && (
+            <Badge tone="green" data-testid="provenance-ai">AI extraction</Badge>
+          )}
+          {!analysis.is_demo && analysis.provenance === "heuristic_fallback" && (
+            <Badge tone="neutral" data-testid="provenance-fallback">Deterministic fallback (no AI)</Badge>
+          )}
         </div>
 
         {/* Redacted brief */}

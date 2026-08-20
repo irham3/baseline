@@ -492,6 +492,15 @@ def _heuristic_extract_scope(brief: str) -> dict:
     }
 
 
+def extract_scope_heuristic(brief: str) -> dict:
+    """Deterministic, non-AI extraction. Used both as the automatic fallback when the
+    LLM is unavailable/fails, and directly when the caller explicitly opts out of AI."""
+    parsed = _heuristic_extract_scope(brief)
+    result = _validate_and_normalize(parsed, brief)
+    result["provenance"] = "heuristic_fallback"
+    return result
+
+
 async def extract_scope(brief: str) -> dict:
     """Run live extraction. Falls back gracefully to deterministic heuristic extraction if LLM is unconfigured/unavailable."""
     if LlmChat is not None and UserMessage is not None and EMERGENT_LLM_KEY:
@@ -511,13 +520,14 @@ async def extract_scope(brief: str) -> dict:
             raw = await chat.send_message(UserMessage(text=user_text))
             parsed = json.loads(_strip_fences(raw))
             if isinstance(parsed, dict) and "fields" in parsed:
-                return _validate_and_normalize(parsed, brief)
+                result = _validate_and_normalize(parsed, brief)
+                result["provenance"] = "ai"
+                return result
         except Exception:
             pass  # Fall through to deterministic heuristic fallback
 
     # Deterministic heuristic fallback ensuring 100% availability with verbatim quotes
-    parsed_heuristic = _heuristic_extract_scope(brief)
-    return _validate_and_normalize(parsed_heuristic, brief)
+    return extract_scope_heuristic(brief)
 
 
 

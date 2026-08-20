@@ -31,9 +31,14 @@ def _guest_headers():
     return {"X-Guest-Id": f"guest_test_{uuid.uuid4().hex[:10]}"}
 
 
+SEED_BRIEF_TEXT = ("Hi, I need 12 Reels for next month's campaign. I will send the footage later. "
+                    "Budget is IDR 3M, ideally finished next week. Revisions until it feels right.")
+
+
 def _create_seed_analysis(headers):
-    r = client.post("/api/analyze", json={"brief": "seed test brief for agreement security", "use_ai": False},
-                    headers=headers)
+    # Matching the literal seed brief text is what routes to the deterministic demo
+    # (options/estimate populated immediately); use_ai is irrelevant to that routing.
+    r = client.post("/api/analyze", json={"brief": SEED_BRIEF_TEXT, "use_ai": False}, headers=headers)
     assert r.status_code == 200
     return r.json()
 
