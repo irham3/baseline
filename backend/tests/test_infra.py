@@ -32,7 +32,10 @@ def test_health_reports_environment_db_and_llm_without_secrets():
 def test_production_without_mongo_url_fails_fast_on_import():
     backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     env = {**os.environ, "ENVIRONMENT": "production", "JWT_SECRET": "prod-test-secret"}
-    env.pop("MONGO_URL", None)
+    # Set (not remove) an empty value: a local backend/.env may legitimately define
+    # MONGO_URL for dev, and load_dotenv() only fills in keys that are *absent* from
+    # os.environ, so simply popping the key would let the real .env value leak back in.
+    env["MONGO_URL"] = ""
     result = subprocess.run(
         [sys.executable, "-c", "import core"],
         cwd=backend_dir, env=env, capture_output=True, text=True, timeout=30,
