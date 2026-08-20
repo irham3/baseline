@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { TriangleAlert, Link2, ExternalLink, Copy, Check, ArrowLeft, Ban } from "lucide-react";
+import { TriangleAlert, Link2, ExternalLink, Copy, Check, ArrowLeft, Ban, Search } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { SEO } from "@/components/SEO";
 import { Spinner, Badge, Toast } from "@/components/ui/primitives";
@@ -13,6 +13,7 @@ import WhatsAppPreview, { useClipboard } from "@/components/WhatsAppPreview";
 import CostProfileForm, { DEMO_COST_PROFILE } from "@/components/CostProfileForm";
 import { useAuth } from "@/context/AuthContext";
 import { client, apiErrorMessage, track } from "@/lib/api";
+import { idr } from "@/lib/format";
 
 function toNum(v) {
   const n = Number(v);
@@ -49,6 +50,7 @@ export default function Analysis() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { state: copyState, copy } = useClipboard();
+  const { state: scopeCopyState, copy: copyScopeReply } = useClipboard();
 
   const [analysis, setAnalysis] = useState(null);
   const [loadErr, setLoadErr] = useState(null);
@@ -72,6 +74,10 @@ export default function Analysis() {
   const [creating, setCreating] = useState(false);
   const [revoking, setRevoking] = useState(false);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [scopeCheckText, setScopeCheckText] = useState("");
+  const [scopeChecking, setScopeChecking] = useState(false);
+  const [scopeCheckResult, setScopeCheckResult] = useState(null);
+  const [scopeCheckError, setScopeCheckError] = useState(null);
   const [toast, setToast] = useState("");
 
   useEffect(() => {
@@ -158,6 +164,21 @@ export default function Analysis() {
       setTimeout(() => setToast(""), 3000);
     } finally {
       setRevoking(false);
+    }
+  };
+
+  const runScopeCheck = async () => {
+    if (!scopeCheckText.trim()) return;
+    setScopeChecking(true);
+    setScopeCheckError(null);
+    try {
+      const { data } = await client.post(`/analysis/${id}/scope-check`, { new_request: scopeCheckText });
+      setScopeCheckResult(data);
+      track("scope_check_run", { analysis_id: id });
+    } catch (e) {
+      setScopeCheckError(apiErrorMessage(e.response?.data?.detail) || "Scope Check failed. Please try again.");
+    } finally {
+      setScopeChecking(false);
     }
   };
 
@@ -342,6 +363,67 @@ export default function Analysis() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {agreement && (
+          <div className="mt-8 card p-5" data-testid="scope-check-panel">
+            <h2 className="flex items-center gap-2 text-xl font-extrabold text-ink"><Search size={18} className="text-green" /> Scope Check</h2>
+            <p className="mt-1 text-ink-soft">Client asking for something extra after sending the Agreement Sheet? Paste the request to check whether it's already included, a revision, or new scope.</p>
+            <textarea
+              name="scope-check-input"
+              className="textarea mt-4 min-h-[80px]"
+              placeholder={'e.g. "Bisa tambahin 2 video lagi ga? sama warnanya diganti jadi lebih cerah"'}
+              value={scopeCheckText}
+              onChange={(e) => setScopeCheckText(e.target.value)}
+              disabled={scopeChecking}
+              data-testid="scope-check-textarea"
+            />
+            <button onClick={runScopeCheck} disabled={scopeChecking || !scopeCheckText.trim()} className="btn-primary btn-md mt-3" data-testid="scope-check-run">
+              {scopeChecking ? <><Spinner size={16} /> Checking...</> : "Check scope"}
+            </button>
+
+            {scopeCheckError && (
+              <div className="mt-4 flex items-start gap-2 rounded-xl border border-danger/30 bg-danger/5 p-3.5 text-[13px] text-danger" data-testid="scope-check-error">
+                <TriangleAlert size={16} className="mt-0.5 shrink-0" />
+                <div>
+                  {scopeCheckError}
+                  <button onClick={runScopeCheck} className="ml-2 font-bold underline underline-offset-2">Retry</button>
+                </div>
+              </div>
+            )}
+
+            {scopeCheckResult && (
+              <div className="mt-4 space-y-3" data-testid="scope-check-result">
+                <Badge tone={
+                  scopeCheckResult.classification === "included" ? "green" :
+                  scopeCheckResult.classification === "revision" ? "amber" :
+                  scopeCheckResult.classification === "new_scope" ? "danger" : "neutral"
+                }>
+                  {{
+                    included: "Included in scope",
+                    revision: "Covered as a revision",
+                    new_scope: "New scope — needs a fee adjustment",
+                    unclear: "Unclear — needs clarification",
+                  }[scopeCheckResult.classification] || scopeCheckResult.classification}
+                </Badge>
+                <p className="text-[13px] text-ink-soft">{scopeCheckResult.explanation}</p>
+                {scopeCheckResult.delta_result && (
+                  <p className="text-[13px] font-semibold text-ink">
+                    Adds about {scopeCheckResult.delta_result.price_delta_low != null ? idr(scopeCheckResult.delta_result.price_delta_low) : "-"} to {scopeCheckResult.delta_result.price_delta_high != null ? idr(scopeCheckResult.delta_result.price_delta_high) : "-"}.
+                  </p>
+                )}
+                <div className="rounded-xl bg-raised p-3.5">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="text-[12px] font-bold text-ink-faint">Suggested reply</span>
+                    <button onClick={() => copyScopeReply(scopeCheckResult.whatsapp)} className="btn-secondary btn-sm">
+                      {scopeCopyState === "ok" ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy</>}
+                    </button>
+                  </div>
+                  <p className="whitespace-pre-wrap text-[13px] text-ink-soft">{scopeCheckResult.whatsapp}</p>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
