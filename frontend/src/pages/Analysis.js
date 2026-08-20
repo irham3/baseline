@@ -127,7 +127,7 @@ export default function Analysis() {
     setCreating(true);
     try {
       const { data } = await client.post(`/analysis/${id}/agreement`, {
-        option: opt,
+        option_id: opt.id,
         project_title: projectTitle || "Video offer - Baseline Work",
       });
       setAgreement(data);

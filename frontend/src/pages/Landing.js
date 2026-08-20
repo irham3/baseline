@@ -106,6 +106,7 @@ function AIInputBox() {
         <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-white/5 pt-4">
           <p className="text-[11px] text-zinc-500 max-w-sm leading-relaxed">
             Baseline AI automatically extracts deliverable volume, hidden assumptions, requested revisions, and budget constraints.
+            Contact details are redacted before analysis. If the AI is unavailable, a deterministic fallback extracts the same brief without it.
           </p>
           
           <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -184,7 +185,7 @@ export default function Landing() {
 
             {/* Micro proof line */}
             <p className="mt-8 text-xs text-zinc-500 font-mono">
-              100% Client-Side Private
+              Your rate, cost, and margin never appear in a client-facing link
             </p>
           </div>
 
@@ -264,7 +265,9 @@ export default function Landing() {
                 <div className="text-3xl font-extrabold text-white mt-1 font-mono">
                   {seed ? idrCompact(seed.price.price_floor_low) : "IDR 5.5M"}
                 </div>
-                <span className="text-[11px] text-zinc-400 mt-1 block">Protects minimum 35% margin</span>
+                <span className="text-[11px] text-zinc-400 mt-1 block">
+                  Protects your {seed ? Math.round(seed.price.target_margin * 100) : 20}% target margin
+                </span>
               </div>
             </div>
 
@@ -284,10 +287,10 @@ export default function Landing() {
 
               <div className="rounded-xl border border-white/10 bg-black/40 p-4 space-y-2">
                 <div className="flex items-center gap-2 text-xs text-emerald-400 font-semibold">
-                  <ShieldCheck size={14} /> Air-gapped Agreement Links
+                  <ShieldCheck size={14} /> Cost data stays out of the link
                 </div>
                 <div className="text-[11px] text-zinc-400">
-                  Clients only see deliverables, timelines, and payment milestones.
+                  Clients only see deliverables, timeline, and revision terms — never your internal cost, rate, or margin.
                 </div>
               </div>
             </div>

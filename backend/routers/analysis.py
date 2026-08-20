@@ -169,7 +169,8 @@ def _apply_calibration(est: dict, summary: dict) -> tuple[dict, dict]:
 
 def _build_pricing(scope: dict, cph: float, target_margin: float, est: dict) -> dict:
     out = {"price": None, "options": None, "whatsapp": None, "decline": None}
-    buffers = scope_mod.derive_buffers(scope)
+    labor_mid = (est["low"] + est["high"]) / 2 * cph
+    buffers = scope_mod.derive_buffers(scope, labor_mid)
     out["price"] = pricing.price_estimate(est["low"], est["high"], cph, 0.0, buffers,
                                           target_margin, scope.get("client_budget"))
     if scope.get("client_budget"):
@@ -196,10 +197,7 @@ async def estimate(analysis_id: str, body: EstimateBody, request: Request):
             if summary:
                 est, calibration_trace = _apply_calibration(est, summary)
 
-    completeness = pricing.scope_completeness(
-        len(scope_mod.REQUIRED_FIELDS) - scope["unresolved_major_count"] - 2,
-        len(scope_mod.REQUIRED_FIELDS),
-    )
+    completeness = scope_mod.compute_scope_completeness(body.scope_overrides)
     parts = _build_pricing(scope, cph, target_margin, est) if (complete and cph) else \
         {"price": None, "options": None, "whatsapp": None, "decline": None}
     price, options = parts["price"], parts["options"]
@@ -286,10 +284,10 @@ async def scope_check(analysis_id: str, body: ScopeCheckBody, request: Request):
             tm = body.cost_profile.target_margin
             est_base = pricing.estimate_hours(base_scope)
             est_new = pricing.estimate_hours(new_scope)
-            p_base = pricing.price_estimate(est_base["low"], est_base["high"], cph, 0.0,
-                                            scope_mod.derive_buffers(base_scope), tm)
-            p_new = pricing.price_estimate(est_new["low"], est_new["high"], cph, 0.0,
-                                           scope_mod.derive_buffers(new_scope), tm)
+            base_buffers = scope_mod.derive_buffers(base_scope, (est_base["low"] + est_base["high"]) / 2 * cph)
+            new_buffers = scope_mod.derive_buffers(new_scope, (est_new["low"] + est_new["high"]) / 2 * cph)
+            p_base = pricing.price_estimate(est_base["low"], est_base["high"], cph, 0.0, base_buffers, tm)
+            p_new = pricing.price_estimate(est_new["low"], est_new["high"], cph, 0.0, new_buffers, tm)
             delta_result = {
                 "hours_delta_low": round(est_new["low"] - est_base["low"], 1),
                 "hours_delta_high": round(est_new["high"] - est_base["high"], 1),

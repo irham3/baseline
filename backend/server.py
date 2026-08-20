@@ -10,8 +10,9 @@ import uuid
 from fastapi import FastAPI, APIRouter, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+import ai_service
 import pricing
-from core import db, now_utc, iso, resolve_owner
+from core import db, now_utc, iso, resolve_owner, ENVIRONMENT, IS_PRODUCTION, MONGO_URL
 from models import AnalyticsBody
 from routers import auth, analysis, agreement, account
 
@@ -22,7 +23,16 @@ misc = APIRouter(prefix="/api")
 
 @misc.get("/health")
 async def health():
-    return {"status": "ok", "formula_version": pricing.FORMULA_VERSION}
+    db_configured = bool(MONGO_URL)
+    db_mode = "mongo" if not db._use_memory else "memory"
+    llm_configured = bool(ai_service.EMERGENT_LLM_KEY) and ai_service.LlmChat is not None
+    return {
+        "status": "ok",
+        "formula_version": pricing.FORMULA_VERSION,
+        "environment": ENVIRONMENT,
+        "database": {"configured": db_configured, "mode": db_mode},
+        "llm": {"configured": llm_configured},
+    }
 
 
 @misc.post("/analytics")

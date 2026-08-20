@@ -62,14 +62,17 @@ class ScopeCheckBody(BaseModel):
 
 
 class AgreementBody(BaseModel):
-    option: dict
-    project_title: str
-    client_name: Optional[str] = None
+    # Only a reference and editable, non-numeric copy are trusted from the browser.
+    # The backend looks up the actual price/quantity/timeline from the server-stored
+    # analysis by option_id -- the client can never supply numeric deal terms directly.
+    option_id: str = Field(min_length=1, max_length=10)
+    project_title: str = Field(min_length=1, max_length=200)
+    client_name: Optional[str] = Field(default=None, max_length=200)
 
 
 class AgreementResponseBody(BaseModel):
     action: str
-    message: Optional[str] = None
+    message: Optional[str] = Field(default=None, max_length=2000)
 
 
 class DemoAgreementBody(BaseModel):

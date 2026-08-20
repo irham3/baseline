@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, BriefcaseBusiness, LogOut, Menu, UserRound, X } from "lucide-react";
+import { BriefcaseBusiness, LogOut, Menu, UserRound, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 const PRIMARY_NAV = [];
@@ -194,7 +194,7 @@ export function Footer({ dark = true }) {
         <div>
           <span className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-zinc-300" : "text-ink"}`}>Notice</span>
           <p className={`mt-2 max-w-md text-xs leading-relaxed ${dark ? "text-zinc-500" : "text-ink-faint"}`}>
-            Baseline Work is a scope documentation and estimation instrument. All pricing is derived from verified cost profiles and transparent hourly productivity mathematics.
+            Baseline Work is a scope documentation and estimation tool, not legal, tax, or financial advice. Pricing is derived from the cost profile and assumptions you provide, computed by deterministic, versioned formulas — never invented by AI.
           </p>
         </div>
       </div>

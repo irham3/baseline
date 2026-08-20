@@ -37,15 +37,15 @@ def test_demo_seed_numbers():
     r = requests.get(f"{API}/demo/seed", timeout=15)
     assert r.status_code == 200
     d = r.json()
-    assert d["estimate"]["low"] == 37.0
-    assert d["estimate"]["high"] == 42.0
-    assert d["price"]["break_even_low"] == 4100000
-    assert d["price"]["break_even_high"] == 4600000
-    assert d["price"]["price_floor_low"] == 5125000
-    assert d["price"]["price_floor_high"] == 5750000
+    assert d["estimate"]["low"] == 45.4
+    assert d["estimate"]["high"] == 52.8
+    assert d["price"]["break_even_low"] == 4790000
+    assert d["price"]["break_even_high"] == 5530000
+    assert d["price"]["price_floor_low"] == 5987500
+    assert d["price"]["price_floor_high"] == 6912500
     prices = [o["price"] for o in d["options"]]
-    assert prices == [3000000, 5500000, 6500000]
-    assert d["scope_completeness"]["percent"] == 87
+    assert prices == [3000000, 7000000, 9000000]
+    assert d["scope_completeness"]["percent"] == 100
     assert d["risk"]["level"] == "high"
 
 
@@ -208,10 +208,20 @@ def test_create_agreement_and_public_projection(analysis_ctx):
                         headers=analysis_ctx["headers"], json=est_body, timeout=30).json()
     opt = est["options"][1]
     r = requests.post(f"{API}/analysis/{aid}/agreement", headers=analysis_ctx["headers"],
-                      json={"option": opt, "project_title": "Test Project",
+                      json={"option_id": opt["id"], "project_title": "Test Project",
                             "client_name": "Client X"}, timeout=15)
     assert r.status_code == 200, r.text
     token = r.json()["token"]
+
+    # tampering with numeric fields client-side must have no effect: the server looks
+    # up the real option by id from the server-stored analysis
+    tampered = requests.post(f"{API}/analysis/{aid}/agreement", headers=analysis_ctx["headers"],
+                             json={"option_id": opt["id"], "project_title": "Tampered",
+                                   "price": 1, "quantity": 999}, timeout=15)
+    assert tampered.status_code == 200, tampered.text
+    tampered_snap = requests.get(f"{API}/agreement/{tampered.json()['token']}", timeout=15).json()["snapshot"]
+    assert tampered_snap["price"] == opt["price"]
+    assert tampered_snap["quantity"] == opt["quantity"]
 
     pub = requests.get(f"{API}/agreement/{token}", timeout=15).json()
     snap = pub["snapshot"]

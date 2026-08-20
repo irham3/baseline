@@ -188,10 +188,18 @@ class _DatabaseProxy:
         self._collections = {}
 
     def _fallback(self, error):
+        if IS_PRODUCTION:
+            # Production must never silently persist to memory: data would vanish on
+            # restart while the app kept reporting success. Surface the failure instead.
+            raise RuntimeError(
+                f"MongoDB is unavailable in production ({error}). Refusing to fall back "
+                "to in-memory storage; fix MONGO_URL/connectivity or restart once it recovers."
+            ) from error
         if not self._use_memory:
             import logging
             logging.getLogger("uvicorn.error").warning(
-                f"MongoDB connection failed ({error}); falling back to in-memory database."
+                f"MongoDB connection failed ({error}); falling back to in-memory database "
+                "(development/test only)."
             )
             self._use_memory = True
 
@@ -211,6 +219,9 @@ class _DatabaseProxy:
         return self.__getattr__(name)
 
 
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "development").strip().lower()
+IS_PRODUCTION = ENVIRONMENT == "production"
+
 MONGO_URL = os.environ.get("MONGO_URL")
 DB_NAME = os.environ.get("DB_NAME", "baseline_dev")
 _motor_client = None
@@ -219,9 +230,13 @@ if MONGO_URL:
     try:
         _motor_client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=2000)
         _motor_db = _motor_client[DB_NAME]
-    except Exception:
+    except Exception as e:
+        if IS_PRODUCTION:
+            raise RuntimeError(f"ENVIRONMENT=production requires a working MONGO_URL; connection setup failed: {e}") from e
         _motor_client = None
         _motor_db = None
+elif IS_PRODUCTION:
+    raise RuntimeError("ENVIRONMENT=production requires MONGO_URL to be set; refusing to start on in-memory storage.")
 
 client = _motor_client
 _mem_db = _MemoryDatabase()
