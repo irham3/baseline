@@ -51,7 +51,7 @@ function NumberInput({ label, value, onChange, suffix, testid, min = 0 }) {
   );
 }
 
-export default function ClarificationGate({ overrides, setOverrides, questions, onRecalc, recalculating }) {
+export default function ClarificationGate({ overrides, setOverrides, questions, onRecalc, recalculating, hideRecalc = false }) {
   const { state, copy } = useClipboard();
   const set = (k, v) => setOverrides((o) => ({ ...o, [k]: v }));
 
@@ -138,7 +138,13 @@ export default function ClarificationGate({ overrides, setOverrides, questions, 
           className="btn-primary btn-md mt-4 w-full sm:w-auto"
           data-testid="recalc-btn"
         >
-          {recalculating ? <><Spinner size={16} /> Calculating...</> : <><Calculator size={16} /> Calculate estimate</>}
+          {recalculating ? (
+            <><Spinner size={16} /> {hideRecalc ? "Updating..." : "Calculating..."}</>
+          ) : hideRecalc ? (
+            <><Calculator size={16} /> Update scope critique</>
+          ) : (
+            <><Calculator size={16} /> Calculate estimate</>
+          )}
         </button>
       </div>
     </div>

@@ -72,11 +72,11 @@
   --line-subtle-rgb: 255 255 255;
   --green-rgb: 16 185 129;
   --green-strong-rgb: 52 211 153;
-  --green-soft-rgb: 16 185 129;
+  --green-soft-rgb: 15 38 34;
   --amber-rgb: 245 158 11;
-  --amber-soft-rgb: 245 158 11;
+  --amber-soft-rgb: 39 35 22;
   --danger-rgb: 239 68 68;
-  --danger-soft-rgb: 239 68 68;
+  --danger-soft-rgb: 42 24 29;
 }
 
 * {
@@ -219,6 +219,55 @@ select {
 }
 
 .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.hand { font-family: "Caveat", cursive; }
+.sticker { transform: rotate(var(--r, -6deg)); }
+
+/* Continuous ambient motion for the Landing hero backdrop — never settles,
+   which is the whole point (shuntapp.xyz / veilpass-stellar reference: a
+   background that keeps breathing, not a one-shot entrance). The global
+   prefers-reduced-motion rule below still zeroes all of this for users who
+   ask for it. */
+@keyframes blob-float {
+  0%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  33% { transform: translate(36px, -28px) scale(1.08) rotate(4deg); }
+  66% { transform: translate(-18px, 22px) scale(0.96) rotate(-3deg); }
+}
+@keyframes blob-float-delayed {
+  0%, 100% { transform: rotate(35deg) translate(0, 0) scale(1); }
+  33% { transform: rotate(35deg) translate(-32px, 24px) scale(1.1); }
+  66% { transform: rotate(35deg) translate(20px, -16px) scale(0.94); }
+}
+.blob-float { animation: blob-float 14s ease-in-out infinite; }
+.blob-float-delayed { animation: blob-float-delayed 18s ease-in-out infinite; }
+
+@keyframes ring-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.ring-rotate { animation: ring-rotate 40s linear infinite; }
+.ring-rotate-reverse { animation: ring-rotate 55s linear infinite reverse; }
+
+.spin-slow { animation: ring-rotate 24s linear infinite; }
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.15); }
+}
+.pulse-soft { animation: pulse-soft 3.5s ease-in-out infinite; }
+
+@keyframes particle-drift {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  15% { opacity: 0.9; }
+  85% { opacity: 0.9; }
+  100% { transform: translateY(-120px) translateX(14px); opacity: 0; }
+}
+.particle-drift { animation: particle-drift linear infinite; }
+.grad-text {
+  background: linear-gradient(180deg, #86efc0 0%, #10b981 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
 
 .spotlight-card {
   --spot-x: 50%;

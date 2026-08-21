@@ -80,7 +80,7 @@ export default function EstimateResult({ estimate, price, completeness, confiden
             </>
           ) : (
             <div className="col-span-2 flex items-center rounded-xl border border-dashed border-amber/50 bg-amber-soft/50 p-3.5 text-[13px] text-amber lg:col-span-3" data-testid="price-unavailable">
-              Cost Profile is incomplete. Baseline Work can show hours, but the price floor needs your cost data.
+              Cost Profile is incomplete. Baseline can show hours, but the price floor needs your cost data.
             </div>
           )}
         </div>

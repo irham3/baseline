@@ -1,20 +1,21 @@
-# Baseline Work
-> Pre-deal scope checks and price floor calculation for video creators and creative freelancers.
+# Baseline
+> AI pre-deal decision system for Indonesian freelancers. Baseline before yes.
 
 ## About Baseline
-Baseline Work stops creative freelancers (specifically short-form video editors, motion designers, and creative directors) from underquoting, absorbing scope creep, and accepting unpriced client assumptions. When you paste an incoming client brief, Baseline maps missing parameters, calculates a mathematical price floor from real operating overhead, and formats 3-option deal proposals and lightweight pre-deal scope agreements.
+Baseline critiques a client brief before a freelancer says yes: what is clear, what is risky, what must be clarified, and — when a calibrated work template is available — what effort and price floor can be defended. The critique layer (Generic Deal Rule Pack: deliverable clarity, revision boundary, approval flow, timeline dependency, commercial clarity) works across professions. Deep effort/price estimation is currently calibrated for one profession template: short-form video editing. Unsupported professions still get evidence-backed critique and clarification questions — Baseline never invents an hour range or price floor it cannot defend.
 
 ## Core Capabilities
-- **Brief Analysis & Hidden Scope Detection**: Parses unstructured client text to flag unpriced variables (aspect ratios, raw footage organization, turnaround speed, revision limits, subtitles, motion complexity).
-- **Price Floor Calculator**: Computes minimum hourly rate from monthly take-home pay, business overhead, emergency reserves, and billable utilization ratios.
-- **3-Option Deal Proposals**: Structures options (Budget-fit / Core / Safety-first) to prevent all-or-nothing pricing traps.
-- **Pre-Deal Scope Agreements**: Generates lightweight, mobile-friendly deal sign-off sheets (`/s/:token`) for WhatsApp or email before creative work begins.
-- **Judge Mode Simulation**: A 90-second interactive workflow showing how unpriced scope turns profitable proposals into losses.
+- **Evidence-backed Brief Critique**: Every issue traces to a quote from the brief, or is explicitly labeled "not stated" — never invented.
+- **Readiness Gate**: `not_ready_to_quote` / `ready_scope_only` / `ready_to_estimate`. Pricing only ever appears in the last state.
+- **Price Floor Calculator** (short-form video template): Computes minimum hourly rate from monthly take-home pay, business overhead, emergency reserves, and billable utilization ratios.
+- **Bounded Deal Options**: Structures options (budget-fixed / scope-fixed / rush) to prevent all-or-nothing pricing traps.
+- **Pre-Deal Scope Agreements ("Lembar Sepakat")**: Generates lightweight, mobile-friendly deal sign-off sheets (`/s/:token`) for WhatsApp or email before creative work begins — never exposes the freelancer's rate, cost, or margin.
+- **Personal Estimation Memory**: Calibrates future estimates against one past project's estimated-vs-actual hours.
+- **Judge Mode Simulation**: A 90-second interactive workflow showing how an ambiguous brief becomes a defensible quote.
 
 ## Target Audience
-- Short-form video editors (TikTok, Instagram Reels, YouTube Shorts)
-- Motion designers and commercial video creators
-- Independent digital creative freelancers
+- Short-form video editors and micro creative studios (TikTok, Instagram Reels, YouTube Shorts) — calibrated estimation
+- Other freelance professions (web/mobile developers, designers, copywriters, consultants) — brief critique and clarification, without fabricated pricing
 
 ## Key URLs & Resources
 - Homepage: https://baselinework.app/

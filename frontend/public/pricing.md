@@ -1,6 +1,6 @@
-# Pricing — Baseline Work
+# Pricing — Baseline
 
-Baseline Work provides pre-deal scope checking and price floor calculation for video creators and creative freelancers.
+Baseline is an AI pre-deal decision system for Indonesian freelancers: brief critique and clarification for any profession, plus transparent price floor calculation on calibrated work templates (short-form video today).
 
 ## Free Tier (Guest & Community)
 - Price: $0 / IDR 0

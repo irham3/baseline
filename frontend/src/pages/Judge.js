@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Check, ChevronRight, ChevronLeft, RotateCcw, ExternalLink, TriangleAlert,
   MessageSquareText, Sparkles, Wand2, ListChecks, Calculator, HandCoins,
@@ -114,6 +115,8 @@ const FALLBACK_SEED = {
   formula_version: "1.1.0",
 };
 
+const THEME_KEY = "baseline-landing-theme";
+
 const STEPS = [
   { key: "brief", label: "Brief", Icon: MessageSquareText },
   { key: "map", label: "Evidence", Icon: ListChecks },
@@ -134,19 +137,19 @@ function Stepper({ index }) {
           <div key={s.key} className="flex shrink-0 items-center gap-1">
             <div
               className={`flex h-8 w-8 items-center justify-center rounded-full border text-[11px] font-bold transition-colors ${
-                state === "done" ? "border-emerald-500 bg-emerald-500 text-zinc-950" :
-                state === "active" ? "border-emerald-400 bg-emerald-500/15 text-emerald-300" :
-                "border-white/15 bg-white/5 text-zinc-500"
+                state === "done" ? "border-green bg-green text-white" :
+                state === "active" ? "border-green bg-green-soft text-green" :
+                "border-line bg-raised text-ink-faint"
               }`}
               aria-current={state === "active" ? "step" : undefined}
               title={s.label}
             >
               {state === "done" ? <Check size={14} /> : i + 1}
             </div>
-            <span className={`hidden text-[11px] font-semibold sm:inline ${state === "todo" ? "text-zinc-500" : "text-zinc-200"}`}>
+            <span className={`hidden text-[11px] font-semibold sm:inline ${state === "todo" ? "text-ink-faint" : "text-ink"}`}>
               {s.label}
             </span>
-            {i < STEPS.length - 1 && <ChevronRight size={12} className="text-zinc-700" />}
+            {i < STEPS.length - 1 && <ChevronRight size={12} className="text-line" />}
           </div>
         );
       })}
@@ -165,7 +168,7 @@ function NavRow({ onBack, onNext, nextLabel = "Next", nextDisabled = false, back
   return (
     <div className="mt-6 flex items-center justify-between gap-3">
       {!backHidden ? (
-        <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-zinc-200 hover:bg-white/10" data-testid="judge-back">
+        <button type="button" onClick={onBack} className="btn-secondary btn-md" data-testid="judge-back">
           <ChevronLeft size={15} /> Back
         </button>
       ) : <span />}
@@ -174,7 +177,7 @@ function NavRow({ onBack, onNext, nextLabel = "Next", nextDisabled = false, back
           type="button"
           onClick={onNext}
           disabled={nextDisabled}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-bold text-zinc-950 shadow-[0_0_20px_rgba(16,185,129,0.2)] hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn-primary btn-md"
           data-testid="judge-next"
         >
           {nextLabel} <ChevronRight size={15} />
@@ -196,6 +199,22 @@ export default function Judge() {
   const [agreeErr, setAgreeErr] = useState(null);
   const [creatingAgreement, setCreatingAgreement] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [dark, setDark] = useState(() => {
+    try {
+      return localStorage.getItem(THEME_KEY) !== "light";
+    } catch {
+      return true;
+    }
+  });
+  const toggleDark = () => {
+    setDark((d) => {
+      const next = !d;
+      try {
+        localStorage.setItem(THEME_KEY, next ? "dark" : "light");
+      } catch { /* ignore storage failures */ }
+      return next;
+    });
+  };
 
   const loadSeed = () => {
     setLoading(true);
@@ -248,49 +267,74 @@ export default function Judge() {
 
   if (loading) {
     return (
-      <Shell dark={true}>
+      <Shell dark={dark} onToggleDark={toggleDark}>
         <SEO title="90-Second Judge Mode Demo" description="A deterministic, no-login guided demo of Baseline's pre-deal scope and pricing workflow." canonical="/judge" noIndex />
-        <div className="flex min-h-[70vh] flex-col items-center justify-center gap-3 text-white">
+        <div className="flex min-h-[70vh] flex-col items-center justify-center gap-3">
           <Spinner size={26} />
-          <p className="text-sm text-zinc-400">Loading the seeded demo...</p>
+          <p className="text-sm text-ink-faint">Loading the seeded demo...</p>
         </div>
       </Shell>
     );
   }
 
   return (
-    <Shell dark={true}>
+    <Shell dark={dark} onToggleDark={toggleDark}>
       <SEO
         title="90-Second Judge Mode Demo"
         description="A deterministic, no-login guided demo of Baseline's pre-deal scope and pricing workflow: brief -> evidence -> clarification -> price floor -> deal options -> Agreement Sheet."
         canonical="/judge"
         noIndex
       />
-      <div className="min-h-screen bg-[#090b10] px-5 py-10 text-white sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-5xl">
+      <div className="relative min-h-screen overflow-hidden bg-page py-10 text-ink">
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div
+            className="absolute inset-0"
+            style={{
+              opacity: dark ? 0.4 : 0.45,
+              backgroundImage: `linear-gradient(to right, ${dark ? "rgba(255,255,255,0.05)" : "rgba(15,23,18,0.045)"} 1px, transparent 1px), linear-gradient(to bottom, ${dark ? "rgba(255,255,255,0.05)" : "rgba(15,23,18,0.045)"} 1px, transparent 1px)`,
+              backgroundSize: "46px 46px",
+              WebkitMaskImage: "radial-gradient(ellipse 55% 40% at 50% 4%, black 0%, transparent 72%)",
+              maskImage: "radial-gradient(ellipse 55% 40% at 50% 4%, black 0%, transparent 72%)",
+            }}
+          />
+          <svg width="640" height="640" viewBox="-100 -100 200 200" className="blob-float absolute -right-52 -top-56 blur-[5px]" style={{ opacity: dark ? 0.16 : 0.09 }}>
+            <path fill="#10b981" d="M45.3,-58.5C58.4,-49.7,68.2,-35.6,71.9,-19.9C75.6,-4.2,73.2,13,65.6,27.3C58,41.6,45.2,52.9,30.6,60.6C16,68.3,-0.4,72.4,-16.6,69.8C-32.8,67.2,-48.8,57.9,-59.6,44.5C-70.4,31.1,-76,13.6,-74.9,-3.4C-73.8,-20.4,-66,-36.9,-53.7,-46.6C-41.4,-56.3,-24.6,-59.2,-8.4,-60.9C7.8,-62.6,32.2,-67.3,45.3,-58.5Z" />
+          </svg>
+          <svg width="480" height="480" viewBox="-100 -100 200 200" className="blob-float-delayed absolute -left-52 top-32 blur-[4px]" style={{ opacity: dark ? 0.12 : 0.07 }}>
+            <path fill="#2dd4bf" d="M45.3,-58.5C58.4,-49.7,68.2,-35.6,71.9,-19.9C75.6,-4.2,73.2,13,65.6,27.3C58,41.6,45.2,52.9,30.6,60.6C16,68.3,-0.4,72.4,-16.6,69.8C-32.8,67.2,-48.8,57.9,-59.6,44.5C-70.4,31.1,-76,13.6,-74.9,-3.4C-73.8,-20.4,-66,-36.9,-53.7,-46.6C-41.4,-56.3,-24.6,-59.2,-8.4,-60.9C7.8,-62.6,32.2,-67.3,45.3,-58.5Z" />
+          </svg>
+        </div>
+        <div className="wrap relative">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold text-emerald-400">
+              <div className="inline-flex items-center gap-2 rounded-full border border-green/30 bg-green-soft px-3 py-1 text-[11px] font-semibold text-green">
                 <Sparkles size={12} /> Judge Mode — no login, ~90 seconds
               </div>
-              <h1 className="mt-2 text-xl font-extrabold sm:text-2xl">See the pre-deal workflow end to end</h1>
+              <h1 className="mt-2 text-xl font-extrabold text-ink sm:text-2xl">See the pre-deal workflow end to end</h1>
             </div>
-            <button type="button" onClick={restart} className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-white/10" data-testid="judge-restart">
+            <button type="button" onClick={restart} className="btn-secondary btn-sm" data-testid="judge-restart">
               <RotateCcw size={13} /> Restart
             </button>
           </div>
 
           {source === "fallback" && (
-            <div className="mt-4 flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 text-xs text-amber-300" data-testid="judge-fallback-notice">
+            <div className="mt-4 flex items-center gap-2 rounded-xl border border-amber/30 bg-amber-soft px-3.5 py-2 text-xs text-amber" data-testid="judge-fallback-notice">
               <WifiOff size={14} /> Using bundled demo data — the live API didn't respond in time.
               <button type="button" onClick={loadSeed} className="ml-auto font-bold underline underline-offset-2">Retry live data</button>
             </div>
           )}
 
           <div className="mt-6"><Stepper index={step} /></div>
-        </div>
 
-        <div className="mt-8">
+          <AnimatePresence mode="wait">
+          <motion.div
+            key={step}
+            className="mt-8"
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          >
           {/* Step 0: Brief */}
           {step === 0 && (
             <StepCard>
@@ -480,6 +524,8 @@ export default function Judge() {
               <NavRow onBack={() => setStep(6)} onNext={null} />
             </StepCard>
           )}
+          </motion.div>
+          </AnimatePresence>
         </div>
       </div>
     </Shell>

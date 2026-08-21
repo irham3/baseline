@@ -8,6 +8,7 @@ from fastapi import APIRouter, Request, HTTPException, Depends
 import pricing
 import scope as scope_mod
 import ai_service
+import rules
 import core
 from core import db, now_utc, iso, clean, resolve_user, resolve_owner
 from models import AnalyzeBody, CostProfileBody, EstimateBody, DealCopyBody, ScopeCheckBody
@@ -104,12 +105,19 @@ async def analyze(body: AnalyzeBody, request: Request):
         except RuntimeError as e:
             raise HTTPException(status_code=503,
                                 detail=f"AI analysis failed ({e}). Try again or use the always-available demo sample.")
+    classification = rules.classify_profession(brief)
+    deal_issues = rules.run_generic_deal_rules(extraction["fields"], extraction.get("ambiguities", []))
+    readiness_state = rules.compute_readiness_state(deal_issues, classification["support_level"])
+
     analysis_id = uuid.uuid4().hex
     doc = {
         "analysis_id": analysis_id, "owner_type": owner_type, "owner_id": owner_id,
         "brief": brief, "is_demo": is_seed_demo, "redaction": redaction,
         "provenance": extraction.get("provenance", "heuristic_fallback"),
         "state": "COMPLETED" if seed else "NEEDS_CLARIFICATION",
+        "profession": classification["profession"], "support_level": classification["support_level"],
+        "deal_issues": deal_issues, "readiness_state": readiness_state,
+        "rule_version": rules.RULE_VERSION,
         "fields": extraction["fields"],
         "ambiguities": extraction.get("ambiguities", []),
         "clarifications": extraction["clarifications"],
@@ -185,11 +193,30 @@ def _build_pricing(scope: dict, cph: float, target_margin: float, est: dict) -> 
     return out
 
 
+def _overrides_to_fields(overrides: dict) -> list[dict]:
+    """Re-express user-resolved overrides as evidence-shaped fields so the same
+    Generic Deal Rule Pack can re-check readiness after clarification answers,
+    instead of re-checking the original (now stale) AI extraction."""
+    names = ("quantity", "revision_rounds", "final_duration", "footage_available",
+             "footage_preselected", "deadline_working_days", "approver_count", "client_budget")
+    fields = []
+    for name in names:
+        value = overrides.get(name)
+        fields.append({
+            "name": name, "value": value,
+            "status": "missing" if value in (None, "") else "stated",
+            "source_quote": None,
+        })
+    return fields
+
+
 @router.post("/analysis/{analysis_id}/estimate")
 async def estimate(analysis_id: str, body: EstimateBody, request: Request):
     doc = await _owned_analysis(analysis_id, request)
     scope = build_scope(body.scope_overrides)
     est = pricing.estimate_hours(scope)
+    deal_issues = rules.run_generic_deal_rules(_overrides_to_fields(body.scope_overrides), [])
+    readiness_state = rules.compute_readiness_state(deal_issues, doc.get("support_level", "calibrated_estimation"))
     cph, complete = compute_cost_per_hour(body.cost_profile)
     target_margin = body.cost_profile.target_margin
 
@@ -202,7 +229,12 @@ async def estimate(analysis_id: str, body: EstimateBody, request: Request):
                 est, calibration_trace = _apply_calibration(est, summary)
 
     completeness = scope_mod.compute_scope_completeness(body.scope_overrides)
-    parts = _build_pricing(scope, cph, target_margin, est) if (complete and cph) else \
+    # Principle #4 (master plan 1.3): an unsupported profession never gets a fabricated
+    # EstimateScenario, no matter how complete its scope looks -- only readiness_state
+    # "ready_to_estimate" (support_level == calibrated_estimation, no open high-severity
+    # issues) is allowed to price. "ready_scope_only" still returns hours/price as None.
+    can_price = complete and cph and readiness_state == "ready_to_estimate"
+    parts = _build_pricing(scope, cph, target_margin, est) if can_price else \
         {"price": None, "options": None, "whatsapp": None, "decline": None}
     price, options = parts["price"], parts["options"]
 
@@ -216,12 +248,14 @@ async def estimate(analysis_id: str, body: EstimateBody, request: Request):
         "risk": risk, "confidence": conf, "options": options,
         "whatsapp": parts["whatsapp"], "decline_message": parts["decline"],
         "calibration_trace": calibration_trace, "scope_used": scope,
+        "deal_issues": deal_issues, "readiness_state": readiness_state,
         "formula_version": pricing.FORMULA_VERSION,
     }
     await db.brief_analyses.update_one(
         {"analysis_id": doc["analysis_id"]},
         {"$set": {
             "state": "ESTIMATED" if price else "READY_TO_ESTIMATE",
+            "deal_issues": deal_issues, "readiness_state": readiness_state,
             "estimate": est, "price": price, "options": options, "risk": risk,
             "confidence": conf, "scope_completeness": completeness,
             "whatsapp": parts["whatsapp"], "decline_message": parts["decline"],

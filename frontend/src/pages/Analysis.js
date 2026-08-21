@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
+import { motion } from "framer-motion";
 import { TriangleAlert, Link2, ExternalLink, Copy, Check, ArrowLeft, Ban, Search } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { SEO } from "@/components/SEO";
 import { Spinner, Badge, Toast } from "@/components/ui/primitives";
 import BriefMap from "@/components/BriefMap";
+import BriefCritique from "@/components/BriefCritique";
 import ClarificationGate from "@/components/ClarificationGate";
 import EstimateResult from "@/components/EstimateResult";
 import RiskTriggers from "@/components/RiskTriggers";
@@ -14,6 +16,8 @@ import CostProfileForm, { DEMO_COST_PROFILE } from "@/components/CostProfileForm
 import { useAuth } from "@/context/AuthContext";
 import { client, apiErrorMessage, track } from "@/lib/api";
 import { idr } from "@/lib/format";
+
+const THEME_KEY = "baseline-landing-theme";
 
 function toNum(v) {
   const n = Number(v);
@@ -82,6 +86,22 @@ export default function Analysis() {
   const [scopeCheckResult, setScopeCheckResult] = useState(null);
   const [scopeCheckError, setScopeCheckError] = useState(null);
   const [toast, setToast] = useState("");
+  const [dark, setDark] = useState(() => {
+    try {
+      return localStorage.getItem(THEME_KEY) !== "light";
+    } catch {
+      return true;
+    }
+  });
+  const toggleDark = () => {
+    setDark((d) => {
+      const next = !d;
+      try {
+        localStorage.setItem(THEME_KEY, next ? "dark" : "light");
+      } catch { /* ignore storage failures */ }
+      return next;
+    });
+  };
 
   useEffect(() => {
     client
@@ -158,7 +178,7 @@ export default function Analysis() {
     try {
       const { data } = await client.post(`/analysis/${id}/agreement`, {
         option_id: opt.id,
-        project_title: projectTitle || "Video offer - Baseline Work",
+        project_title: projectTitle || "Video offer - Baseline",
       });
       setAgreement(data);
       track("agreement_created", { analysis_id: id, option: selected });
@@ -209,7 +229,7 @@ export default function Analysis() {
 
   if (loadErr) {
     return (
-      <Shell>
+      <Shell dark={dark} onToggleDark={toggleDark}>
         <div className="wrap-narrow py-16 text-center">
           <TriangleAlert className="mx-auto text-amber" size={30} />
           <p className="mt-3 font-semibold text-ink">{loadErr}</p>
@@ -221,26 +241,31 @@ export default function Analysis() {
 
   if (!analysis || !overrides) {
     return (
-      <Shell>
+      <Shell dark={dark} onToggleDark={toggleDark}>
         <div className="wrap flex min-h-[60vh] items-center justify-center"><Spinner size={26} /></div>
       </Shell>
     );
   }
 
   return (
-    <Shell>
+    <Shell dark={dark} onToggleDark={toggleDark}>
       <SEO
-        title="Brief Map & Scope Analysis"
-        description="Detailed scope map, hidden parameters, price floor calculation, and deal options for the analyzed client brief."
+        title="Pre-deal Critique & Scope Analysis"
+        description="Evidence-backed brief critique, readiness state, hidden parameters, price floor calculation, and deal options for the analyzed client brief."
         canonical={`/analysis/${id}`}
         noIndex={true}
       />
-      <div className="wrap py-8">
+      <motion.div
+        className="wrap py-8"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      >
         <button onClick={() => navigate("/analyze")} className="btn-ghost btn-sm mb-3" data-testid="analysis-back">
           <ArrowLeft size={14} /> New analysis
         </button>
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-extrabold text-ink">Brief Map</h1>
+          <h1 className="text-2xl font-extrabold text-ink">Pre-deal Critique</h1>
           {analysis.is_demo && <Badge tone="amber" data-testid="provenance-demo">Demo data</Badge>}
           {!analysis.is_demo && analysis.provenance === "ai" && (
             <Badge tone="green" data-testid="provenance-ai">AI extraction</Badge>
@@ -259,18 +284,31 @@ export default function Analysis() {
           )}
         </div>
 
-        {/* Brief map */}
-        <div className="mt-5"><BriefMap fields={analysis.fields} /></div>
+        {/* Prioritized Brief Critique — the primary result, before any field map or price */}
+        <div className="mt-5">
+          <BriefCritique
+            readinessState={result?.readiness_state ?? analysis.readiness_state}
+            issues={result?.deal_issues ?? analysis.deal_issues}
+          />
+        </div>
+
+        {/* Evidence detail — secondary, not the magic-moment screen */}
+        <div className="mt-6">
+          <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-ink-faint">Evidence detail</h3>
+          <BriefMap fields={analysis.fields} />
+        </div>
 
         {/* Two-column: clarification + result */}
         <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="space-y-4">
-            <div className="card p-5">
-              <h3 className="mb-3 font-bold text-ink">Cost Profile</h3>
-              <CostProfileForm value={costProfile} onChange={(cp) => setCostProfile(cp)} />
-            </div>
+            {analysis.support_level === "calibrated_estimation" && (
+              <div className="card p-5">
+                <h3 className="mb-3 font-bold text-ink">Cost Profile</h3>
+                <CostProfileForm value={costProfile} onChange={(cp) => setCostProfile(cp)} />
+              </div>
+            )}
 
-            {user && hasCalibration && (
+            {user && hasCalibration && analysis.support_level === "calibrated_estimation" && (
               <label className="card flex items-center justify-between p-4" data-testid="apply-calibration">
                 <span className="text-sm font-medium text-ink">Apply one-project calibration</span>
                 <input type="checkbox" name="apply-calibration" checked={applyCalibration} onChange={(e) => setApplyCalibration(e.target.checked)} className="h-5 w-5 accent-[var(--green)]" />
@@ -283,11 +321,20 @@ export default function Analysis() {
               questions={analysis.clarifications}
               onRecalc={runEstimate}
               recalculating={recalc}
+              hideRecalc={analysis.support_level !== "calibrated_estimation"}
             />
           </div>
 
           <div className="space-y-4">
-            {!result ? (
+            {analysis.support_level !== "calibrated_estimation" ? (
+              <div className="card flex min-h-[240px] flex-col items-center justify-center gap-3 p-8 text-center" data-testid="estimation-unsupported">
+                <p className="font-semibold text-ink">Deep estimation isn't supported for this project type yet.</p>
+                <p className="text-[13px] text-ink-soft">
+                  Baseline doesn't have a calibrated hour/price template for it, so it won't invent one. Answer the questions above,
+                  then use <span className="font-semibold text-ink">Copy questions</span> to send them, or copy the evidence above into your own reply.
+                </p>
+              </div>
+            ) : !result ? (
               <div className="card flex min-h-[240px] flex-col items-center justify-center p-8 text-center" data-testid="estimate-empty">
                 <p className="text-ink-soft">Answer the scope fields, then press <span className="font-semibold text-ink">Calculate estimate</span> to see the hour range and price floor.</p>
               </div>
@@ -468,7 +515,7 @@ export default function Analysis() {
             )}
           </div>
         )}
-      </div>
+      </motion.div>
       <Toast show={!!toast}>{toast}</Toast>
     </Shell>
   );

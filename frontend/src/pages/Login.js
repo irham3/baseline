@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { client, apiErrorMessage } from "@/lib/api";
 
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || "";
+const THEME_KEY = "baseline-landing-theme";
 
 function GoogleMark() {
   return (
@@ -29,6 +30,22 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const googleBtnRef = useRef(null);
+  const [dark, setDark] = useState(() => {
+    try {
+      return localStorage.getItem(THEME_KEY) !== "light";
+    } catch {
+      return true;
+    }
+  });
+  const toggleDark = () => {
+    setDark((d) => {
+      const next = !d;
+      try {
+        localStorage.setItem(THEME_KEY, next ? "dark" : "light");
+      } catch { /* ignore storage failures */ }
+      return next;
+    });
+  };
 
   // Handle Google Token Response from GSI
   const handleGoogleCredentialResponse = useCallback(async (response) => {
@@ -150,10 +167,10 @@ export default function Login() {
   };
 
   return (
-    <Shell>
+    <Shell dark={dark} onToggleDark={toggleDark}>
       <SEO
-        title="Sign In / Register — Baseline Work"
-        description="Sign in to your Baseline Work account to save client cost profiles, project calibration records, and historical scope analyses."
+        title="Sign In / Register — Baseline"
+        description="Sign in to your Baseline account to save client cost profiles, project calibration records, and historical scope analyses."
         canonical="/login"
       />
       <div className="wrap flex min-h-[70vh] items-center justify-center py-10">

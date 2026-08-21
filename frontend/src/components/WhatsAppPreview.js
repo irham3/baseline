@@ -84,7 +84,7 @@ export default function WhatsAppPreview({ drafts, declineMode, declineMessage, o
         aria-label="WhatsApp message draft"
       />
       <div className="mt-3 flex items-center justify-between gap-3">
-        <p className="text-[12px] text-ink-faint">Editable. Baseline Work never sends automatically.</p>
+        <p className="text-[12px] text-ink-faint">Editable. Baseline never sends automatically.</p>
         <button
           onClick={handleCopy}
           className="btn-primary btn-sm"
