@@ -122,6 +122,14 @@ export default function Login() {
     }
   };
 
+  const authErrorMessage = (detail) => {
+    const tooShortPassword = Array.isArray(detail) && detail.some(
+      (e) => e?.loc?.includes("password") && e?.type === "string_too_short"
+    );
+    if (tooShortPassword) return "Password must be at least 6 characters.";
+    return apiErrorMessage(detail);
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -135,7 +143,7 @@ export default function Login() {
       setUser(data);
       navigate("/app");
     } catch (e) {
-      setError(apiErrorMessage(e.response?.data?.detail) || "Sign-in failed.");
+      setError(authErrorMessage(e.response?.data?.detail) || "Sign-in failed.");
     } finally {
       setLoading(false);
     }
