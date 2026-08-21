@@ -420,6 +420,10 @@ def _seed_fields() -> list[dict]:
          "source_quote": None, "confidence": 1.0},
         {"name": "source_file_handover", "label": "Source-file handover", "value": None, "status": "missing",
          "source_quote": None, "confidence": 1.0},
+        {"name": "acceptance_criteria", "label": "Definition of done", "value": None, "status": "missing",
+         "source_quote": None, "confidence": 1.0},
+        {"name": "change_boundary", "label": "Change boundary", "value": None, "status": "missing",
+         "source_quote": None, "confidence": 1.0},
     ]
 
 
@@ -470,7 +474,8 @@ def resolved_seed_scope() -> dict:
 AGREEMENT_SNAPSHOT_VERSION = "1.0.0"
 
 
-def agreement_snapshot(opt: dict, project_title: str, client_name: Optional[str] = None, is_demo: bool = False) -> dict:
+def agreement_snapshot(opt: dict, project_title: str, client_name: Optional[str] = None,
+                       is_demo: bool = False, deal_terms: Optional[dict] = None) -> dict:
     """Build the client-facing immutable snapshot from a selected option. No internal cost data."""
     deliverables = [
         f"{opt.get('quantity')} vertical videos ({_duration_phrase(opt)}, 9:16)",
@@ -479,6 +484,7 @@ def agreement_snapshot(opt: dict, project_title: str, client_name: Optional[str]
         revision_phrase(opt.get("revision_rounds"), consolidated=True),
         "1 final 1080x1920 file per video",
     ]
+    terms = deal_terms or {}
     return {
         "project_title": project_title,
         "client_name": client_name,
@@ -491,6 +497,8 @@ def agreement_snapshot(opt: dict, project_title: str, client_name: Optional[str]
         "revision_rounds": opt.get("revision_rounds"),
         "subtitles": opt.get("subtitles", True),
         "footage_selection_included": opt.get("footage_selection_included", False),
+        "acceptance_criteria": terms.get("acceptance_criteria"),
+        "change_boundary": terms.get("change_boundary"),
         "exclusions": opt.get("exclusions", []),
         "conditions": opt.get("conditions", []),
         "deliverables": [d for d in deliverables if d],

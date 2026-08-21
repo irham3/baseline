@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
-import { CheckCircle2, Clock, Film, RefreshCw, CalendarClock, TriangleAlert, MessageSquare, ShieldCheck, Sun, Moon } from "lucide-react";
+import { CheckCircle2, Clock, Film, RefreshCw, CalendarClock, TriangleAlert, MessageSquare, ShieldCheck, Sun, Moon, ClipboardCheck, GitBranch } from "lucide-react";
 import { Logo } from "@/components/Shell";
 import { SEO } from "@/components/SEO";
 import { Spinner, Badge } from "@/components/ui/primitives";
@@ -237,6 +237,12 @@ export default function Agreement() {
               <Row T={T} icon={Film} label="Deliverables" value={<ul className="list-disc space-y-0.5 pl-4">{s.deliverables.map((d, i) => <li key={i}>{d}</li>)}</ul>} />
               {s.conditions?.length > 0 && (
                 <Row T={T} icon={CalendarClock} label="Start conditions" value={<ul className="list-disc space-y-0.5 pl-4">{s.conditions.map((c, i) => <li key={i}>{c}</li>)}</ul>} />
+              )}
+              {s.acceptance_criteria && (
+                <Row T={T} icon={ClipboardCheck} label="Definition of done" value={s.acceptance_criteria} />
+              )}
+              {s.change_boundary && (
+                <Row T={T} icon={GitBranch} label="Change boundary" value={s.change_boundary} />
               )}
             </div>
 

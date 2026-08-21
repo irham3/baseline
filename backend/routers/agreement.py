@@ -55,7 +55,10 @@ async def create_agreement(analysis_id: str, body: AgreementBody, request: Reque
         raise HTTPException(status_code=422, detail="This option has no viable price and cannot become an Agreement Sheet.")
 
     token = secrets.token_urlsafe(24)
-    snapshot = scope_mod.agreement_snapshot(opt, body.project_title.strip(), (body.client_name or "").strip() or None)
+    snapshot = scope_mod.agreement_snapshot(
+        opt, body.project_title.strip(), (body.client_name or "").strip() or None,
+        deal_terms=doc.get("deal_terms"),
+    )
     agreement = {
         "token": token,
         "analysis_id": analysis_id,

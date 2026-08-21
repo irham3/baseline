@@ -102,6 +102,20 @@ def test_heuristic_extracts_final_duration_minutes_as_seconds():
     assert f["value"] == 120.0
 
 
+def test_heuristic_extracts_acceptance_criteria_when_stated():
+    result = ai_service.extract_scope_heuristic(
+        "Butuh 5 video, dianggap selesai kalau sudah di-approve tim marketing")
+    f = _field(result, "acceptance_criteria")
+    assert f["status"] == "stated"
+    assert f["source_quote"] in "Butuh 5 video, dianggap selesai kalau sudah di-approve tim marketing"
+
+
+def test_heuristic_leaves_acceptance_and_change_boundary_missing_by_default():
+    result = ai_service.extract_scope_heuristic("Butuh 10 reels, budget 5jt, revisi 2x")
+    assert _field(result, "acceptance_criteria")["status"] == "missing"
+    assert _field(result, "change_boundary")["status"] == "missing"
+
+
 def test_malformed_llm_json_falls_back_gracefully(monkeypatch):
     class FakeChat:
         def __init__(self, *a, **kw):

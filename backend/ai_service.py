@@ -51,6 +51,7 @@ Inputs: footage_available, footage_volume_minutes, footage_preselected, script_a
 Editing complexity: basic_cut, subtitles, motion_graphics_level, color_correction, audio_cleanup, stock_assets, thumbnail
 Workflow: start_condition, deadline_text, deadline_date_if_explicit, approver_count, feedback_method, revision_rounds, source_file_handover
 Commercial: client_budget_amount, client_budget_currency, direct_costs_mentioned, rush_requirement, payment_term_text
+Acceptance & change: acceptance_criteria, change_boundary
 
 OUTPUT
 Return valid JSON only (no markdown) matching this schema:
@@ -123,6 +124,8 @@ FIELD_LABELS = {
     "direct_costs_mentioned": "Direct costs",
     "rush": "Rush",
     "payment_term_text": "Payment terms",
+    "acceptance_criteria": "Definition of done",
+    "change_boundary": "Change boundary",
 }
 
 
@@ -466,6 +469,32 @@ def _heuristic_extract_scope(brief: str) -> dict:
     fields.append({"name": "approver_count", "value": 1, "status": "inferred", "source_quote": None, "confidence": 0.6})
     fields.append({"name": "aspect_ratio", "value": "9:16", "status": "inferred", "source_quote": None, "confidence": 0.9})
     fields.append({"name": "resolution", "value": "1080x1920", "status": "inferred", "source_quote": None, "confidence": 0.9})
+
+    # Acceptance criteria / change boundary: clients almost never state these in a
+    # casual WhatsApp brief, so recall is deliberately low -- a false "stated" is far
+    # more dangerous here than a missing field the rule pack can flag instead.
+    acc_match = re.search(
+        r"\b(?:dianggap\s+)?(?:selesai|beres|acc|approve\w*|fix|final)\s+"
+        r"(?:kalau|kalo|jika|apabila|setelah|begitu)\s+[^.,;\n]{3,80}",
+        brief, re.IGNORECASE)
+    if acc_match:
+        quote = acc_match.group(0).strip()
+        fields.append({"name": "acceptance_criteria", "value": quote, "status": "stated",
+                       "source_quote": quote, "confidence": 0.75, "inference_explanation": None})
+    else:
+        fields.append({"name": "acceptance_criteria", "value": None, "status": "missing",
+                       "source_quote": None, "confidence": 0.5})
+
+    cb_match = re.search(
+        r"\b(?:ganti|ubah|perubahan|revisi)\s+(?:konsep|concept|format|storyboard|ide)\b[^.,;\n]{0,60}",
+        brief, re.IGNORECASE)
+    if cb_match:
+        quote = cb_match.group(0).strip()
+        fields.append({"name": "change_boundary", "value": quote, "status": "stated",
+                       "source_quote": quote, "confidence": 0.70, "inference_explanation": None})
+    else:
+        fields.append({"name": "change_boundary", "value": None, "status": "missing",
+                       "source_quote": None, "confidence": 0.5})
 
     clarifications = [
         {
