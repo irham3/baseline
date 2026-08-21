@@ -13,6 +13,7 @@ const STATUS = {
   APPROVED: { tone: "green", label: "Approved" },
   CHANGE_REQUESTED: { tone: "amber", label: "Changes requested" },
   EXPIRED: { tone: "danger", label: "Expired" },
+  REVOKED: { tone: "danger", label: "Revoked" },
 };
 
 function Row({ icon: Icon, label, value }) {
@@ -78,6 +79,7 @@ export default function Agreement() {
   const s = data.snapshot;
   const status = STATUS[data.status] || STATUS.SENT;
   const expired = data.status === "EXPIRED";
+  const revoked = data.status === "REVOKED";
   const answered = done || data.status === "APPROVED" || data.status === "CHANGE_REQUESTED";
 
   return (
@@ -144,6 +146,8 @@ export default function Agreement() {
             </div>
           ) : expired ? (
             <div className="card mt-5 p-5 text-center text-ink-soft" data-testid="agreement-expired">This offer has expired. Contact the freelancer for a new offer.</div>
+          ) : revoked ? (
+            <div className="card mt-5 p-5 text-center text-ink-soft" data-testid="agreement-revoked">This offer has been withdrawn by the freelancer. Contact them for a new offer.</div>
           ) : (
             <div className="mt-5" data-testid="agreement-actions">
               {showNote && (
