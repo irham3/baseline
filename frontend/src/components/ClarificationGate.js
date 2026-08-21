@@ -51,7 +51,7 @@ function NumberInput({ label, value, onChange, suffix, testid, min = 0 }) {
   );
 }
 
-export default function ClarificationGate({ overrides, setOverrides, questions, onRecalc, recalculating }) {
+export default function ClarificationGate({ overrides, setOverrides, questions, onRecalc, recalculating, estimationSupported = true, scopeSchema }) {
   const { state, copy } = useClipboard();
   const set = (k, v) => setOverrides((o) => ({ ...o, [k]: v }));
 
@@ -61,6 +61,66 @@ export default function ClarificationGate({ overrides, setOverrides, questions, 
     lines.push("\nThat keeps the offer accurate and prevents scope drift later. Thank you.");
     copy(lines.join("\n"));
   };
+
+  const renderField = (key, meta) => {
+    if (meta.hidden_if) {
+      const { field, equals } = meta.hidden_if;
+      if (overrides[field] === equals) return null;
+    }
+
+    if (meta.type === "integer") {
+      return (
+        <NumberInput
+          key={key}
+          label={meta.label}
+          value={overrides[key]}
+          onChange={(v) => set(key, v)}
+          suffix={meta.suffix}
+          min={meta.min}
+          testid={`ov-${key}`}
+        />
+      );
+    }
+    if (meta.type === "boolean") {
+      return (
+        <Toggle
+          key={key}
+          label={meta.label}
+          value={overrides[key]}
+          onChange={(v) => set(key, v)}
+          testid={`ov-${key}`}
+        />
+      );
+    }
+    if (meta.type === "select") {
+      return (
+        <label key={key} className="block">
+          <span className="field-label">{meta.label}</span>
+          <select
+            name={`ov-${key}`}
+            className="input"
+            value={overrides[key] === null ? "unlimited" : overrides[key] ?? ""}
+            onChange={(e) => set(key, e.target.value === "unlimited" ? null : Number(e.target.value))}
+            data-testid={`ov-${key}`}
+          >
+            {meta.options.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </label>
+      );
+    }
+    return null;
+  };
+
+  const numberFields = [];
+  const booleanFields = [];
+  if (scopeSchema) {
+    for (const [key, meta] of Object.entries(scopeSchema)) {
+      if (meta.type === "boolean") booleanFields.push({ key, meta });
+      else numberFields.push({ key, meta });
+    }
+  }
 
   return (
     <div className="space-y-4" data-testid="clarification-gate">
@@ -96,51 +156,41 @@ export default function ClarificationGate({ overrides, setOverrides, questions, 
         </div>
       )}
 
-      <div className="card p-5">
-        <h4 className="mb-1 font-bold text-ink">Answers &amp; assumptions</h4>
-        <p className="mb-4 text-[13px] text-ink-faint">
-          Fill what you know. Unknown fields can stay as assumptions, but the range will widen.
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <NumberInput label="Video count" value={overrides.quantity} onChange={(v) => set("quantity", v)} testid="ov-quantity" min={1} />
-          <NumberInput label="Client budget" value={overrides.client_budget} onChange={(v) => set("client_budget", v)} suffix="IDR" testid="ov-budget" />
-          <NumberInput label="Final duration / video" value={overrides.final_duration} onChange={(v) => set("final_duration", v)} suffix="sec" testid="ov-duration" />
-          <NumberInput label="Deadline (working days)" value={overrides.deadline_working_days} onChange={(v) => set("deadline_working_days", v)} suffix="days" testid="ov-deadline" />
-          <NumberInput label="Approver count" value={overrides.approver_count} onChange={(v) => set("approver_count", v)} suffix="people" testid="ov-approvers" min={1} />
-          <label className="block">
-            <span className="field-label">Revision rounds</span>
-            <select
-              name="ov-revisions"
-              className="input"
-              value={overrides.revision_rounds === null ? "unlimited" : overrides.revision_rounds ?? ""}
-              onChange={(e) => set("revision_rounds", e.target.value === "unlimited" ? null : Number(e.target.value))}
-              data-testid="ov-revisions"
-            >
-              <option value="1">1 round</option>
-              <option value="2">2 rounds</option>
-              <option value="3">3 rounds</option>
-              <option value="unlimited">Unbounded</option>
-            </select>
-          </label>
-          {!overrides.footage_preselected && (
-            <NumberInput label="Raw footage volume" value={overrides.footage_hours} onChange={(v) => set("footage_hours", v)} suffix="hours" testid="ov-footage-hours" />
+      {estimationSupported && (
+        <div className="card p-5">
+          <h4 className="mb-1 font-bold text-ink">Answers &amp; assumptions</h4>
+          <p className="mb-4 text-[13px] text-ink-faint">
+            Fill what you know. Unknown fields can stay as assumptions, but the range will widen.
+          </p>
+          
+          {scopeSchema ? (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {numberFields.map(({ key, meta }) => renderField(key, meta))}
+              </div>
+              {booleanFields.length > 0 && (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {booleanFields.map(({ key, meta }) => renderField(key, meta))}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center p-4">
+              <Spinner size={24} />
+              <p className="mt-2 text-sm text-ink-faint">Loading schema...</p>
+            </div>
           )}
-        </div>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <Toggle label="Footage already selected" value={overrides.footage_preselected} onChange={(v) => set("footage_preselected", v)} testid="ov-footage-preselected" />
-          <Toggle label="Subtitles included" value={overrides.subtitles} onChange={(v) => set("subtitles", v)} testid="ov-subtitles" />
-          <Toggle label="Scripting included" value={overrides.scripting} onChange={(v) => set("scripting", v)} testid="ov-scripting" />
-        </div>
 
-        <button
-          onClick={onRecalc}
-          disabled={recalculating}
-          className="btn-primary btn-md mt-4 w-full sm:w-auto"
-          data-testid="recalc-btn"
-        >
-          {recalculating ? <><Spinner size={16} /> Calculating...</> : <><Calculator size={16} /> Calculate estimate</>}
-        </button>
-      </div>
+          <button
+            onClick={onRecalc}
+            disabled={recalculating}
+            className="btn-primary btn-md mt-4 w-full sm:w-auto"
+            data-testid="recalc-btn"
+          >
+            {recalculating ? <><Spinner size={16} /> Calculating...</> : <><Calculator size={16} /> Calculate estimate</>}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

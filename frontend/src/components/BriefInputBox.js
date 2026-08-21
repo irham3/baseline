@@ -48,7 +48,7 @@ export default function BriefInputBox() {
       const res = await client.post("/analyze", { brief, use_ai: useAi, redact: true });
       navigate(`/analysis/${res.data.analysis_id}`);
     } catch (err) {
-      setError(err.response?.data?.detail || "Failed to connect to AI engine.");
+      setError(err.response?.data?.detail || err.message || "Failed to connect to AI engine.");
       setAnalyzing(false);
     }
   };
@@ -65,7 +65,7 @@ export default function BriefInputBox() {
       });
       navigate(`/analysis/${res.data.analysis_id}`);
     } catch (err) {
-      setError(err.response?.data?.detail || "Failed to load sample analysis.");
+      setError(err.response?.data?.detail || err.message || "Failed to load sample analysis.");
       setAnalyzing(false);
     }
   };
@@ -85,7 +85,7 @@ export default function BriefInputBox() {
         <textarea
           value={brief}
           onChange={(e) => updateBrief(e.target.value)}
-          placeholder="Paste client brief, WhatsApp chat, or voice note transcript here..."
+          placeholder="Paste any project brief (e.g., Short-form Video, Graphic Design, Web Dev) or WhatsApp chat here..."
           className="w-full min-h-[160px] bg-transparent text-zinc-200 placeholder-zinc-600 outline-none resize-none text-sm leading-relaxed"
           disabled={analyzing}
           data-testid="brief-textarea"
@@ -136,7 +136,7 @@ export default function BriefInputBox() {
         <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-white/5 pt-4">
           <p className="text-[11px] text-zinc-500 max-w-sm leading-relaxed">
             {useAi
-              ? "Baseline AI automatically extracts deliverable volume, hidden assumptions, requested revisions, and budget constraints. Contact details are redacted before analysis. If the AI is unavailable, a deterministic fallback extracts the same brief without it."
+              ? "Baseline AI extracts deal scope (deliverables, timelines, terms) for any profession. Deep estimation is currently optimized for short-form video. Contact details are redacted."
               : "Deterministic extraction only — no AI call is made. Coverage is more limited than AI extraction, but every value is still traceable to a quote in your brief."}
           </p>
 

@@ -20,29 +20,33 @@ function toNum(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-function overridesFromFields(fields) {
-  const get = (name) => fields.find((f) => f.name === name);
-  const rev = get("revision_rounds");
-  const preselected = get("footage_preselected");
-  const scripting = get("scripting");
-  const rush = get("rush");
-  let revision_rounds = null;
-  if (rev && typeof rev.value === "number") revision_rounds = rev.value;
-  return {
-    quantity: toNum(get("quantity")?.value) ?? 1,
-    client_budget: toNum(get("client_budget")?.value),
-    final_duration: toNum(get("final_duration")?.value),
-    deadline_working_days: toNum(get("deadline_working_days")?.value),
-    approver_count: toNum(get("approver_count")?.value) ?? 1,
-    revision_rounds,
-    footage_hours: toNum(get("footage_hours")?.value),
-    footage_preselected: typeof preselected?.value === "boolean" ? preselected.value : false,
-    footage_available: !!get("footage_available")?.value || get("footage_available")?.status === "stated",
-    subtitles: true,
-    scripting: typeof scripting?.value === "boolean" ? scripting.value : false,
-    motion_level: get("motion_level")?.value || "basic",
-    rush: typeof rush?.value === "boolean" ? rush.value : false,
-  };
+function overridesFromFields(fields, schema) {
+  if (!schema) return {};
+  const overrides = {};
+  for (const [key, meta] of Object.entries(schema)) {
+    overrides[key] = meta.default;
+  }
+  for (const f of fields || []) {
+    if (!f.name || !schema[f.name]) continue;
+    const meta = schema[f.name];
+    if (meta.type === "integer") {
+      const n = toNum(f.value);
+      if (n !== null) overrides[f.name] = n;
+    } else if (meta.type === "boolean") {
+      if (typeof f.value === "boolean") {
+        overrides[f.name] = f.value;
+      }
+    } else {
+      if (f.value !== undefined && f.value !== null) {
+        overrides[f.name] = f.value;
+      }
+    }
+  }
+  // Footage available is a special field without user-facing input but used by estimation
+  const get = (name) => fields?.find((x) => x.name === name);
+  const footage_avail = get("footage_available");
+  overrides.footage_available = footage_avail ? (!!footage_avail.value || footage_avail.status === "stated") : true;
+  return overrides;
 }
 
 export default function Analysis() {
@@ -88,7 +92,7 @@ export default function Analysis() {
       .get(`/analysis/${id}`)
       .then((r) => {
         setAnalysis(r.data);
-        setOverrides(r.data.scope_used || overridesFromFields(r.data.fields || []));
+        setOverrides(r.data.scope_used || overridesFromFields(r.data.fields, r.data.scope_schema));
         if (r.data.estimate) {
           setResult(r.data);
         }
@@ -263,54 +267,69 @@ export default function Analysis() {
         <div className="mt-5"><BriefMap fields={analysis.fields} /></div>
 
         {/* Two-column: clarification + result */}
-        <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className={`mt-6 grid gap-6 ${analysis.estimation_supported ? "lg:grid-cols-[0.9fr_1.1fr]" : ""}`}>
           <div className="space-y-4">
-            <div className="card p-5">
-              <h3 className="mb-3 font-bold text-ink">Cost Profile</h3>
-              <CostProfileForm value={costProfile} onChange={(cp) => setCostProfile(cp)} />
-            </div>
+            {analysis.estimation_supported && (
+              <div className="card p-5">
+                <h3 className="mb-3 font-bold text-ink">Cost Profile</h3>
+                <CostProfileForm value={costProfile} onChange={(cp) => setCostProfile(cp)} />
+              </div>
+            )}
 
-            {user && hasCalibration && (
+            {analysis.estimation_supported && user && hasCalibration && (
               <label className="card flex items-center justify-between p-4" data-testid="apply-calibration">
                 <span className="text-sm font-medium text-ink">Apply one-project calibration</span>
                 <input type="checkbox" name="apply-calibration" checked={applyCalibration} onChange={(e) => setApplyCalibration(e.target.checked)} className="h-5 w-5 accent-[var(--green)]" />
               </label>
             )}
 
-            <ClarificationGate
-              overrides={overrides}
-              setOverrides={setOverrides}
-              questions={analysis.clarifications}
-              onRecalc={runEstimate}
-              recalculating={recalc}
-            />
-          </div>
-
-          <div className="space-y-4">
-            {!result ? (
-              <div className="card flex min-h-[240px] flex-col items-center justify-center p-8 text-center" data-testid="estimate-empty">
-                <p className="text-ink-soft">Answer the scope fields, then press <span className="font-semibold text-ink">Calculate estimate</span> to see the hour range and price floor.</p>
-              </div>
-            ) : (
-              <>
-                <EstimateResult
-                  estimate={result.estimate}
-                  price={result.price}
-                  completeness={result.scope_completeness}
-                  confidence={result.confidence}
-                  calibrationTrace={result.calibration_trace}
-                  costProfile={result.price ? { cost_per_hour: costProfile.cost_per_hour || (result.price && result.price.cost_per_hour) } : null}
-                  isDemo={costProfile.is_demo}
-                  onFormulaOpen={() => track("formula_opened", { analysis_id: id })}
-                />
-                <RiskTriggers risk={result.risk} />
-              </>
+            {(analysis.clarifications?.length > 0 || analysis.estimation_supported) && (
+              <ClarificationGate
+                overrides={overrides}
+                setOverrides={setOverrides}
+                questions={analysis.clarifications}
+                onRecalc={runEstimate}
+                recalculating={recalc}
+                estimationSupported={analysis.estimation_supported}
+                scopeSchema={analysis.scope_schema}
+              />
             )}
           </div>
+
+          {analysis.estimation_supported ? (
+            <div className="space-y-4">
+              {!result ? (
+                <div className="card flex min-h-[240px] flex-col items-center justify-center p-8 text-center" data-testid="estimate-empty">
+                  <p className="text-ink-soft">Answer the scope fields, then press <span className="font-semibold text-ink">Calculate estimate</span> to see the hour range and price floor.</p>
+                </div>
+              ) : (
+                <>
+                  <EstimateResult
+                    estimate={result.estimate}
+                    price={result.price}
+                    completeness={result.scope_completeness}
+                    confidence={result.confidence}
+                    calibrationTrace={result.calibration_trace}
+                    costProfile={result.price ? { cost_per_hour: costProfile.cost_per_hour || (result.price && result.price.cost_per_hour) } : null}
+                    isDemo={costProfile.is_demo}
+                    onFormulaOpen={() => track("formula_opened", { analysis_id: id })}
+                  />
+                  <RiskTriggers risk={result.risk} />
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="card flex min-h-[140px] flex-col items-center justify-center p-8 text-center" data-testid="estimate-unsupported">
+                <p className="text-ink-soft">Deep estimation and Deal Options are currently optimized for <span className="font-semibold text-ink">short-form video</span>.</p>
+                <p className="mt-2 text-[13px] text-ink-faint">Baseline extracted the Brief Map above for your reference.</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Options + WhatsApp */}
-        {result?.options && (
+        {analysis.estimation_supported && result?.options && (
           <div className="mt-8">
             <h2 className="text-xl font-extrabold text-ink">Three deal options</h2>
             <p className="mt-1 text-ink-soft">All numbers come from the engine. You can edit every draft before sending.</p>
@@ -408,7 +427,7 @@ export default function Analysis() {
           </div>
         )}
 
-        {agreement && (
+        {analysis.estimation_supported && agreement && (
           <div className="mt-8 card p-5" data-testid="scope-check-panel">
             <h2 className="flex items-center gap-2 text-xl font-extrabold text-ink"><Search size={18} className="text-green" /> Scope Check</h2>
             <p className="mt-1 text-ink-soft">Client asking for something extra after sending the Agreement Sheet? Paste the request to check whether it's already included, a revision, or new scope.</p>

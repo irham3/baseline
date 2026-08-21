@@ -105,11 +105,16 @@ async def analyze(body: AnalyzeBody, request: Request):
             raise HTTPException(status_code=503,
                                 detail=f"AI analysis failed ({e}). Try again or use the always-available demo sample.")
     analysis_id = uuid.uuid4().hex
+    project_type = extraction.get("project_type", "general")
+    estimation_supported = project_type == "short_form_video" or (seed is not None)
+
     doc = {
         "analysis_id": analysis_id, "owner_type": owner_type, "owner_id": owner_id,
         "brief": brief, "is_demo": is_seed_demo, "redaction": redaction,
         "provenance": extraction.get("provenance", "heuristic_fallback"),
         "state": "COMPLETED" if seed else "NEEDS_CLARIFICATION",
+        "project_type": project_type,
+        "estimation_supported": estimation_supported,
         "fields": extraction["fields"],
         "ambiguities": extraction.get("ambiguities", []),
         "clarifications": extraction["clarifications"],
@@ -126,6 +131,8 @@ async def analyze(body: AnalyzeBody, request: Request):
         doc["whatsapp"] = seed["whatsapp"]
         doc["decline_message"] = seed["decline_message"]
         doc["calibration_trace"] = None
+    if estimation_supported:
+        doc["scope_schema"] = scope_mod.SCOPE_SCHEMA
     await db.brief_analyses.insert_one(doc)
     return clean(doc)
 
@@ -142,7 +149,10 @@ async def _owned_analysis(analysis_id: str, request: Request) -> dict:
 
 @router.get("/analysis/{analysis_id}")
 async def get_analysis(analysis_id: str, request: Request):
-    return clean(await _owned_analysis(analysis_id, request))
+    doc = await _owned_analysis(analysis_id, request)
+    if doc.get("estimation_supported", doc.get("project_type") == "short_form_video"):
+        doc["scope_schema"] = scope_mod.SCOPE_SCHEMA
+    return clean(doc)
 
 
 @router.delete("/analysis/{analysis_id}")
@@ -188,6 +198,9 @@ def _build_pricing(scope: dict, cph: float, target_margin: float, est: dict) -> 
 @router.post("/analysis/{analysis_id}/estimate")
 async def estimate(analysis_id: str, body: EstimateBody, request: Request):
     doc = await _owned_analysis(analysis_id, request)
+    if not doc.get("estimation_supported", doc.get("project_type") == "short_form_video"):
+        raise HTTPException(status_code=400, detail="Deep estimation is not supported for this project type.")
+    
     scope = build_scope(body.scope_overrides)
     est = pricing.estimate_hours(scope)
     cph, complete = compute_cost_per_hour(body.cost_profile)
@@ -235,7 +248,10 @@ async def estimate(analysis_id: str, body: EstimateBody, request: Request):
 # -------- AI deal copy (polished English; numbers stay fixed) --------
 @router.post("/analysis/{analysis_id}/deal-copy")
 async def deal_copy(analysis_id: str, body: DealCopyBody, request: Request):
-    await _owned_analysis(analysis_id, request)
+    doc = await _owned_analysis(analysis_id, request)
+    if not doc.get("estimation_supported", doc.get("project_type") == "short_form_video"):
+        raise HTTPException(status_code=400, detail="Deal copy requires deep estimation, which is not supported for this project type.")
+    
     scope = build_scope(body.scope_overrides)
     opts = body.options
     if len(opts) < 2:

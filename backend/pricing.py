@@ -103,9 +103,6 @@ def duration_multiplier(final_duration_seconds) -> tuple[float, float, str]:
 
 def estimate_hours(scope: dict) -> dict:
     """Compute an hour range from a resolved scope state. Returns low/high + named breakdown."""
-    q = int(scope.get("quantity") or 0)
-    _require(q >= 0, "Quantity must be non-negative")
-
     items: list[dict] = []
 
     def add(label: str, low: float, high: float):
@@ -115,51 +112,14 @@ def estimate_hours(scope: dict) -> dict:
     def plural(value: int, singular: str, plural_label: str | None = None) -> str:
         return singular if value == 1 else (plural_label or f"{singular}s")
 
-    # Per project
-    add("Intake & asset management", *TASK_UNITS["intake"])
+    # Dynamic tasks from AI
+    tasks = scope.get("tasks") or []
+    for t in tasks:
+        add(t.get("label", "Task"), float(t.get("low_hours", 0)), float(t.get("high_hours", 0)))
 
-    # Footage handling
-    if scope.get("footage_preselected"):
-        add("Footage handover check (pre-selected)", *TASK_UNITS["footage_preselected"])
-    else:
-        fh = float(scope.get("footage_hours") or 0)
-        lo = fh * TASK_UNITS["footage_per_raw_hour"][0]
-        hi = fh * TASK_UNITS["footage_per_raw_hour"][1]
-        add(f"Footage review & selection ({fh:g}h raw, not pre-selected)", lo, hi)
-
-    # Scripting (per project, opt-in)
-    if scope.get("scripting"):
-        add("Scripting / storyboarding", *TASK_UNITS["scripting"])
-
-    # Per-video editing bundle
-    base_low = TASK_UNITS["rough_cut"][0] + TASK_UNITS["fine_cut"][0] + TASK_UNITS["export_qc"][0]
-    base_high = TASK_UNITS["rough_cut"][1] + TASK_UNITS["fine_cut"][1] + TASK_UNITS["export_qc"][1]
-    parts = ["rough cut", "fine cut", "export/QC"]
-    if scope.get("subtitles", True):
-        base_low += TASK_UNITS["subtitle"][0]
-        base_high += TASK_UNITS["subtitle"][1]
-        parts.append("subtitle")
-    if scope.get("audio_cleanup", True):
-        base_low += TASK_UNITS["audio_cleanup"][0]
-        base_high += TASK_UNITS["audio_cleanup"][1]
-        parts.append("audio")
-    if scope.get("color_correction", True):
-        base_low += TASK_UNITS["color_correction"][0]
-        base_high += TASK_UNITS["color_correction"][1]
-        parts.append("color")
-    if scope.get("motion_level") == "custom":
-        base_low += TASK_UNITS["motion_custom"][0]
-        base_high += TASK_UNITS["motion_custom"][1]
-        parts.append("motion graphics")
-
-    dur_lo_mult, dur_hi_mult, dur_label = duration_multiplier(scope.get("final_duration"))
-    base_low *= dur_lo_mult
-    base_high *= dur_hi_mult
-    add(
-        f"Editing x {q} {plural(q, 'video')} ({', '.join(parts)}; duration band {dur_label}, "
-        f"x{dur_lo_mult:g}-{dur_hi_mult:g})",
-        base_low * q, base_high * q,
-    )
+    if not tasks:
+        # Fallback if no tasks provided
+        add("General Execution", 10.0, 20.0)
 
     # Communication & approval
     ac = int(scope.get("approver_count") or 1)
@@ -265,7 +225,7 @@ def required_days(hours_low: float, daily_capacity: float = DAILY_CAPACITY_HOURS
 def project_timeline(
     hours_high: float,
     *,
-    footage_preselected: bool = True,
+    dependencies_met: bool = True,
     revision_rounds: int = 0,
     approver_count: int = 1,
     rush: bool = False,
@@ -285,9 +245,9 @@ def project_timeline(
     })
 
     asset_days = 0
-    if not footage_preselected:
+    if not dependencies_met:
         asset_days = 1
-        trace.append({"label": "Asset readiness (footage not pre-selected)", "days": asset_days})
+        trace.append({"label": "Asset/Dependency readiness", "days": asset_days})
 
     review_days = 0
     rr = int(revision_rounds or 0)
@@ -350,12 +310,12 @@ def risk_triggers(scope: dict, estimate: dict, price: dict) -> dict:
             "detail": "Three or more key pricing variables are still unresolved.",
         })
 
-    if not scope.get("footage_preselected", False) and scope.get("footage_available"):
+    if not scope.get("dependencies_met", False) and scope.get("dependencies_exist"):
         triggers.append({
             "code": "asset_dependency",
             "severity": "medium",
-            "label": "Start depends on assets",
-            "detail": "Footage is not selected yet; selection adds time and can move the start date.",
+            "label": "Start depends on assets/dependencies",
+            "detail": "Dependencies or assets are not yet provided; this adds time and can move the start date.",
         })
 
     if int(scope.get("approver_count") or 1) >= 2:

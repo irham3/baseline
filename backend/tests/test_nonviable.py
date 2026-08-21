@@ -8,9 +8,7 @@ import pytest
 import requests
 from dotenv import dotenv_values
 
-frontend_env = dotenv_values("/app/frontend/.env")
-BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or frontend_env["REACT_APP_BACKEND_URL"]).rstrip("/")
-
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8001").rstrip("/")
 SEED_BRIEF = (
     "Hi, I need 12 Reels for next month's campaign. I will send the footage later. "
     "Budget is IDR 3M, ideally finished next week. Revisions until it feels right."

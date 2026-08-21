@@ -361,6 +361,34 @@ def clarification_whatsapp(questions: list[dict]) -> str:
 # --------------------------------------------------------------------------
 # Seeded demo fixture. Always works, no AI, computed by the real engine.
 # --------------------------------------------------------------------------
+
+SCOPE_SCHEMA = {
+    "quantity": {"type": "number", "label": "Video count", "min": 1},
+    "client_budget": {"type": "number", "label": "Client budget", "suffix": "IDR"},
+    "final_duration": {"type": "number", "label": "Final duration / video", "suffix": "sec"},
+    "deadline_working_days": {"type": "number", "label": "Deadline (working days)", "suffix": "days"},
+    "approver_count": {"type": "number", "label": "Approver count", "suffix": "people", "min": 1},
+    "revision_rounds": {
+        "type": "select",
+        "label": "Revision rounds",
+        "options": [
+            {"value": 1, "label": "1 round"},
+            {"value": 2, "label": "2 rounds"},
+            {"value": 3, "label": "3 rounds"},
+            {"value": "unlimited", "label": "Unbounded"}
+        ]
+    },
+    "footage_preselected": {"type": "boolean", "label": "Footage already selected"},
+    "footage_hours": {
+        "type": "number",
+        "label": "Raw footage volume",
+        "suffix": "hours",
+        "hidden_if": {"footage_preselected": True}
+    },
+    "subtitles": {"type": "boolean", "label": "Subtitles included"},
+    "scripting": {"type": "boolean", "label": "Scripting included"},
+}
+
 SEED_BRIEF = (
     "Hi, I need 12 Reels for next month's campaign. I will send the footage later. "
     "Budget is IDR 3M, ideally finished next week. Revisions until it feels right."
@@ -558,4 +586,5 @@ def compute_seed_analysis() -> dict:
         "whatsapp": whatsapp,
         "decline_message": decline_message(scope),
         "formula_version": pricing.FORMULA_VERSION,
+        "scope_schema": SCOPE_SCHEMA,
     }
