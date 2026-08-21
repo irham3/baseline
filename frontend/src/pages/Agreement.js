@@ -58,13 +58,18 @@ function getTheme(dark) {
       };
 }
 
-function StatCard({ T, Icon, value, label }) {
+function StatCard({ T, Icon, value, label, reduceMotion }) {
   return (
-    <div className="rounded-2xl px-2.5 py-3.5 text-center" style={{ border: `1px solid ${T.cardBorder}`, background: T.cardBg }}>
+    <motion.div
+      className="rounded-2xl px-2.5 py-3.5 text-center"
+      style={{ borderWidth: 1, borderStyle: "solid", borderColor: T.cardBorder, background: T.cardBg }}
+      whileHover={reduceMotion ? undefined : { y: -4, borderColor: T.accent, boxShadow: "0 20px 40px -20px rgba(0,0,0,0.28)" }}
+      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+    >
       <Icon size={18} className="mx-auto" style={{ color: T.accent }} strokeWidth={1.75} />
       <div className="mt-2 text-sm font-extrabold" style={{ color: T.ink }}>{value}</div>
       <div className="text-[10px]" style={{ color: T.inkFaint }}>{label}</div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -194,7 +199,12 @@ export default function Agreement() {
           {s.is_demo && <Badge tone="amber" className="mt-2">Demo data</Badge>}
 
           {/* price hero */}
-          <div className="relative mt-5 rounded-[20px] px-5 py-7 text-center" style={{ border: `1px solid ${T.cardBorder}`, background: T.cardBg, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 16px 34px -20px rgba(0,0,0,0.2)" }}>
+          <motion.div
+            className="relative mt-5 rounded-[20px] px-5 py-7 text-center"
+            style={{ borderWidth: 1, borderStyle: "solid", borderColor: T.cardBorder, background: T.cardBg, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 16px 34px -20px rgba(0,0,0,0.2)" }}
+            whileHover={reduceMotion ? undefined : { y: -4, borderColor: T.accent, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 24px 46px -20px rgba(0,0,0,0.28)" }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          >
             <div className="sticker absolute left-3.5 -top-3.5 rounded-full px-2.5 py-[5px] text-[10px] font-extrabold" style={{ "--r": "-6deg", background: T.gradApprove, color: T.approveText, boxShadow: "0 8px 16px -8px rgba(15,90,64,0.35)" }}>
               deterministic, not guessed
             </div>
@@ -209,15 +219,20 @@ export default function Agreement() {
               <ShieldCheck size={12} style={{ color: T.accent }} />
               <span className="text-[11.5px] font-bold" style={{ color: T.accent }}>Fixed price — no hidden costs after approval</span>
             </div>
-          </div>
+          </motion.div>
 
           {/* stat row: timeline + revisions */}
           <div className="mt-3.5 grid grid-cols-2 gap-2.5">
-            <StatCard T={T} Icon={Clock} value={`${s.timeline_days} days`} label="Timeline" />
-            <StatCard T={T} Icon={RefreshCw} value={revisionPhrase(s.revision_rounds, true)} label="Revisions" />
+            <StatCard T={T} Icon={Clock} value={`${s.timeline_days} days`} label="Timeline" reduceMotion={reduceMotion} />
+            <StatCard T={T} Icon={RefreshCw} value={revisionPhrase(s.revision_rounds, true)} label="Revisions" reduceMotion={reduceMotion} />
           </div>
 
-          <div className="mt-3.5 rounded-2xl p-5" style={{ border: `1px solid ${T.cardBorder}`, background: T.cardBg }}>
+          <motion.div
+            className="mt-3.5 rounded-2xl p-5"
+            style={{ borderWidth: 1, borderStyle: "solid", borderColor: T.cardBorder, background: T.cardBg }}
+            whileHover={reduceMotion ? undefined : { y: -4, borderColor: T.accent, boxShadow: "0 20px 40px -20px rgba(0,0,0,0.28)" }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          >
             <div className="divide-y" style={{ borderColor: T.cardBorder }}>
               <Row T={T} icon={Film} label="Deliverables" value={<ul className="list-disc space-y-0.5 pl-4">{s.deliverables.map((d, i) => <li key={i}>{d}</li>)}</ul>} />
               {s.conditions?.length > 0 && (
@@ -233,13 +248,18 @@ export default function Agreement() {
                 </ul>
               </div>
             )}
-          </div>
+          </motion.div>
 
           {/* trust / honesty box */}
-          <div className="mt-3.5 flex gap-2.5 rounded-2xl px-4 py-3.5" style={{ border: `1px solid ${T.cardBorder}` }}>
+          <motion.div
+            className="mt-3.5 flex gap-2.5 rounded-2xl px-4 py-3.5"
+            style={{ borderWidth: 1, borderStyle: "solid", borderColor: T.cardBorder }}
+            whileHover={reduceMotion ? undefined : { y: -4, borderColor: T.accent }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          >
             <ShieldCheck size={16} className="mt-0.5 flex-shrink-0" style={{ color: T.inkFaint }} strokeWidth={1.75} />
             <p className="text-[11.5px] leading-relaxed" style={{ color: T.inkFaint }}>This Agreement Sheet documents scope only — not a legal contract. The freelancer&rsquo;s rate, cost, and margin are never shared through this link.</p>
-          </div>
+          </motion.div>
 
           {/* Actions */}
           {answered ? (
