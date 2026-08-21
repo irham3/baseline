@@ -153,12 +153,11 @@ export default function Analyze() {
               <ArrowDown size={20} style={{ color: T.accent }} strokeWidth={1.75} />
             </div>
 
-            <div className="relative">
+            <div className="relative" ref={scopeRef}>
               <div className="sticker absolute right-3.5 -top-3.5 z-10 rounded-full px-2.5 py-[5px] text-[10.5px] font-extrabold" style={{ "--r": "-4deg", background: T.gradPrimary, color: T.btnPrimaryText, boxShadow: "0 8px 16px -6px rgba(16,185,129,0.35)" }}>
                 auto-flagged &darr;
               </div>
               <motion.div
-                ref={scopeRef}
                 initial={{ clipPath: "polygon(0% 0%, -10% 0%, 10% 100%, 0% 100%)" }}
                 animate={scopeInView ? { clipPath: "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)" } : undefined}
                 transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}

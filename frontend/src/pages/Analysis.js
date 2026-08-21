@@ -5,6 +5,11 @@ import { TriangleAlert, Link2, ExternalLink, Copy, Check, ArrowLeft, Ban, Search
 import { Shell } from "@/components/Shell";
 import { SEO } from "@/components/SEO";
 import { Spinner, Badge, Toast } from "@/components/ui/primitives";
+import {
+  AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader,
+  AlertDialogFooter, AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
+import { buttonVariants } from "@/components/ui/button";
 import BriefMap from "@/components/BriefMap";
 import BriefCritique from "@/components/BriefCritique";
 import ClarificationGate from "@/components/ClarificationGate";
@@ -77,7 +82,6 @@ export default function Analysis() {
   const [agreement, setAgreement] = useState(null);
   const [creating, setCreating] = useState(false);
   const [revoking, setRevoking] = useState(false);
-  const [confirmRevoke, setConfirmRevoke] = useState(false);
   const [polishedDrafts, setPolishedDrafts] = useState(null);
   const [polishing, setPolishing] = useState(false);
   const [polishError, setPolishError] = useState(null);
@@ -197,7 +201,6 @@ export default function Analysis() {
       await client.post(`/analysis/${id}/agreement/${agreement.token}/revoke`);
       setAgreement(null);
       setProjectTitle("");
-      setConfirmRevoke(false);
       track("agreement_revoked", { analysis_id: id });
       setToast("Link revoked. Clients can no longer respond to it.");
       setTimeout(() => setToast(""), 3000);
@@ -418,19 +421,25 @@ export default function Analysis() {
                         <a href={`/s/${agreement.token}`} target="_blank" rel="noreferrer" className="btn-primary btn-sm" data-testid="open-agreement">
                           Open <ExternalLink size={14} />
                         </a>
-                        {!confirmRevoke ? (
-                          <button onClick={() => setConfirmRevoke(true)} className="btn-ghost btn-sm text-danger" data-testid="revoke-agreement">
-                            <Ban size={14} /> Revoke
-                          </button>
-                        ) : (
-                          <div className="flex items-center gap-2 rounded-xl border border-danger/30 bg-danger/5 px-3 py-1.5" data-testid="revoke-confirm">
-                            <span className="text-[12px] font-medium text-danger">Revoke this link? The client won't be able to respond anymore.</span>
-                            <button onClick={revokeAgreement} disabled={revoking} className="btn-danger btn-sm">
-                              {revoking ? <Spinner size={13} /> : "Confirm"}
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <button className="btn-ghost btn-sm text-danger" data-testid="revoke-agreement">
+                              <Ban size={14} /> Revoke
                             </button>
-                            <button onClick={() => setConfirmRevoke(false)} disabled={revoking} className="btn-ghost btn-sm">Cancel</button>
-                          </div>
-                        )}
+                          </AlertDialogTrigger>
+                          <AlertDialogContent data-testid="revoke-confirm">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Revoke this link?</AlertDialogTitle>
+                              <AlertDialogDescription>The client won't be able to respond anymore.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={revokeAgreement} disabled={revoking} className={buttonVariants({ variant: "destructive" })}>
+                                {revoking ? <Spinner size={13} /> : "Confirm"}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </div>
                   ) : (

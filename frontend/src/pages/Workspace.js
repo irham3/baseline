@@ -5,6 +5,11 @@ import { Save, Trash2, History, ArrowRight, Check, FileText, Wallet, PieChart, G
 import { Shell } from "@/components/Shell";
 import { SEO } from "@/components/SEO";
 import { Spinner, Badge, Toast } from "@/components/ui/primitives";
+import {
+  AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader,
+  AlertDialogFooter, AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
+import { buttonVariants } from "@/components/ui/button";
 import CostProfileForm, { DEMO_COST_PROFILE } from "@/components/CostProfileForm";
 import { useAuth } from "@/context/AuthContext";
 import { client, apiErrorMessage, track } from "@/lib/api";
@@ -252,9 +257,27 @@ export default function Workspace() {
               {savingCal ? <><Spinner size={16} /> Saving...</> : <><Save size={16} /> Save project</>}
             </button>
             {savedCal && (
-              <button onClick={deleteCal} disabled={deletingCal} className="btn-ghost btn-md" data-testid="cal-delete">
-                {deletingCal ? <Spinner size={16} /> : <><Trash2 size={16} /> Delete</>}
-              </button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button disabled={deletingCal} className="btn-ghost btn-md" data-testid="cal-delete">
+                    {deletingCal ? <Spinner size={16} /> : <><Trash2 size={16} /> Delete</>}
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete this calibration?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      "{savedCal.project_name}" will be removed. Future estimates go back to using no personal calibration signal until you save a new project.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={deleteCal} className={buttonVariants({ variant: "destructive" })}>
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
           </div>
           </section>
