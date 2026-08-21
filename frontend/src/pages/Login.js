@@ -205,7 +205,7 @@ export default function Login() {
                     className="input"
                     autoComplete="name"
                     value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    onChange={(e) => { setForm({ ...form, name: e.target.value }); setError(null); }}
                     data-testid="login-name"
                   />
                 </label>
@@ -219,7 +219,7 @@ export default function Login() {
                   className="input"
                   autoComplete="email"
                   value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  onChange={(e) => { setForm({ ...form, email: e.target.value }); setError(null); }}
                   data-testid="login-email"
                 />
               </label>
@@ -234,7 +234,7 @@ export default function Login() {
                   autoComplete={mode === "login" ? "current-password" : "new-password"}
                   placeholder="Minimum 6 characters"
                   value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  onChange={(e) => { setForm({ ...form, password: e.target.value }); setError(null); }}
                   data-testid="login-password"
                 />
               </label>
