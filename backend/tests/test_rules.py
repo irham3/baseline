@@ -15,6 +15,10 @@ RESOLVED_FIELDS = [
     _field("deadline_working_days", 5),
     _field("approver_count", 1),
     _field("client_budget", 3_000_000),
+    _field("acceptance_criteria", "approved once the final cut is delivered",
+           quote="approved once the final cut is delivered"),
+    _field("change_boundary", "concept changes after approval are new scope",
+           quote="concept changes after approval are new scope"),
 ]
 
 
@@ -82,6 +86,23 @@ def test_deadline_before_footage_delivered_is_high():
     issue = _by_rule(issues, "deadline_dependency")
     assert issue is not None
     assert issue["severity"] == "high"
+
+
+def test_missing_acceptance_criteria_is_medium_severity():
+    fields = [f for f in RESOLVED_FIELDS if f["name"] != "acceptance_criteria"]
+    issues = rules.run_generic_deal_rules(fields, [])
+    issue = _by_rule(issues, "acceptance_criteria")
+    assert issue is not None
+    assert issue["severity"] == "medium"
+    assert issue["evidence"] is None
+
+
+def test_missing_change_boundary_is_medium_severity():
+    fields = [f for f in RESOLVED_FIELDS if f["name"] != "change_boundary"]
+    issues = rules.run_generic_deal_rules(fields, [])
+    issue = _by_rule(issues, "change_boundary")
+    assert issue is not None
+    assert issue["severity"] == "medium"
 
 
 def test_readiness_not_ready_when_high_issue_open():

@@ -27,9 +27,11 @@ const READINESS = {
 const CATEGORY_LABEL = {
   revision_boundary: "Revision boundary",
   deliverable_clarity: "Deliverable clarity",
+  acceptance_clarity: "Acceptance clarity",
   input_responsibility: "Input responsibility",
   timeline: "Timeline",
   approval_flow: "Approval flow",
+  change_boundary: "Change boundary",
   commercial_clarity: "Commercial clarity",
 };
 

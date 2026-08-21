@@ -142,6 +142,28 @@ def _rule_approver(fields):
     return None
 
 
+def _rule_acceptance_criteria(fields):
+    ac = _field(fields, "acceptance_criteria")
+    if _missing(ac):
+        return _issue(
+            "acceptance_criteria", "Definition of done is not agreed",
+            "Without a stated condition for what counts as accepted, sign-off can be withheld indefinitely and every further request still looks reasonable.",
+            "medium", "acceptance_clarity", _evidence(ac), ["acceptance", "timeline"],
+        )
+    return None
+
+
+def _rule_change_boundary(fields):
+    cb = _field(fields, "change_boundary")
+    if _missing(cb):
+        return _issue(
+            "change_boundary", "Concept change is not separated from revision",
+            "Without a line between fixing the agreed cut and asking for something new, concept, format, or feature changes get absorbed as free revisions.",
+            "medium", "change_boundary", _evidence(cb), ["cost", "effort", "revision"],
+        )
+    return None
+
+
 def _rule_budget_anchor(fields):
     budget = _field(fields, "client_budget")
     if _missing(budget):
@@ -159,10 +181,12 @@ def _rule_budget_anchor(fields):
 GENERIC_RULES = [
     _rule_revision_boundary,
     _rule_deliverable_quantity,
+    _rule_acceptance_criteria,
     _rule_final_duration,
     _rule_footage_responsibility,
     _rule_deadline_dependency,
     _rule_approver,
+    _rule_change_boundary,
 ]
 
 

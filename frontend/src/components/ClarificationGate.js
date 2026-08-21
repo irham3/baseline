@@ -51,6 +51,48 @@ function NumberInput({ label, value, onChange, suffix, testid, min = 0 }) {
   );
 }
 
+function DefinitionSelect({ label, hint, value, onChange, presets, testid }) {
+  const [custom, setCustom] = React.useState(() => !!value && !presets.includes(value));
+
+  const handleSelect = (e) => {
+    const v = e.target.value;
+    if (v === "__custom") {
+      setCustom(true);
+      onChange(null);
+      return;
+    }
+    setCustom(false);
+    onChange(v === "" ? null : v);
+  };
+
+  return (
+    <label className="block">
+      <span className="field-label">{label}</span>
+      <select
+        name={testid}
+        className="input"
+        value={custom ? "__custom" : value ?? ""}
+        onChange={handleSelect}
+        data-testid={testid}
+      >
+        <option value="">Not defined yet</option>
+        {presets.map((p) => <option key={p} value={p}>{p}</option>)}
+        <option value="__custom">Custom&hellip;</option>
+      </select>
+      {custom && (
+        <input
+          type="text"
+          className="input mt-2"
+          value={value ?? ""}
+          placeholder={hint}
+          onChange={(e) => onChange(e.target.value || null)}
+          data-testid={`${testid}-custom`}
+        />
+      )}
+    </label>
+  );
+}
+
 export default function ClarificationGate({ overrides, setOverrides, questions, onRecalc, recalculating, hideRecalc = false }) {
   const { state, copy } = useClipboard();
   const set = (k, v) => setOverrides((o) => ({ ...o, [k]: v }));
@@ -130,6 +172,39 @@ export default function ClarificationGate({ overrides, setOverrides, questions, 
           <Toggle label="Footage already selected" value={overrides.footage_preselected} onChange={(v) => set("footage_preselected", v)} testid="ov-footage-preselected" />
           <Toggle label="Subtitles included" value={overrides.subtitles} onChange={(v) => set("subtitles", v)} testid="ov-subtitles" />
           <Toggle label="Scripting included" value={overrides.scripting} onChange={(v) => set("scripting", v)} testid="ov-scripting" />
+        </div>
+
+        <div className="mt-4 border-t border-line/15 pt-4">
+          <h5 className="text-sm font-bold text-ink">Terms you define</h5>
+          <p className="mb-3 mt-0.5 text-[13px] text-ink-faint">
+            Clients rarely state these. Setting them now is what stops silent scope creep later.
+          </p>
+          <div className="grid gap-3">
+            <DefinitionSelect
+              label="Definition of done"
+              hint="e.g. approved in writing by the marketing lead"
+              value={overrides.acceptance_criteria}
+              onChange={(v) => set("acceptance_criteria", v)}
+              testid="ov-acceptance"
+              presets={[
+                "Approved when the final cut matches the agreed brief",
+                "Approved in writing by the named final approver",
+                "Auto-approved if no consolidated feedback arrives in 3 working days",
+              ]}
+            />
+            <DefinitionSelect
+              label="Change boundary"
+              hint="e.g. a new platform or aspect ratio is new scope"
+              value={overrides.change_boundary}
+              onChange={(v) => set("change_boundary", v)}
+              testid="ov-change-boundary"
+              presets={[
+                "Concept, script, or format changes after approval are new scope",
+                "Only fixes to the agreed cut count as a revision",
+                "Adding videos, platforms, or aspect ratios is new scope",
+              ]}
+            />
+          </div>
         </div>
 
         <button

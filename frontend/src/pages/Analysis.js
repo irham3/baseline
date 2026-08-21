@@ -51,6 +51,8 @@ function overridesFromFields(fields) {
     scripting: typeof scripting?.value === "boolean" ? scripting.value : false,
     motion_level: get("motion_level")?.value || "basic",
     rush: typeof rush?.value === "boolean" ? rush.value : false,
+    acceptance_criteria: get("acceptance_criteria")?.value ?? null,
+    change_boundary: get("change_boundary")?.value ?? null,
   };
 }
 
@@ -112,7 +114,8 @@ export default function Analysis() {
       .get(`/analysis/${id}`)
       .then((r) => {
         setAnalysis(r.data);
-        setOverrides(r.data.scope_used || overridesFromFields(r.data.fields || []));
+        const base = r.data.scope_used || overridesFromFields(r.data.fields || []);
+        setOverrides({ ...base, ...(r.data.deal_terms || {}) });
         if (r.data.estimate) {
           setResult(r.data);
         }

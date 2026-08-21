@@ -198,7 +198,8 @@ def _overrides_to_fields(overrides: dict) -> list[dict]:
     Generic Deal Rule Pack can re-check readiness after clarification answers,
     instead of re-checking the original (now stale) AI extraction."""
     names = ("quantity", "revision_rounds", "final_duration", "footage_available",
-             "footage_preselected", "deadline_working_days", "approver_count", "client_budget")
+             "footage_preselected", "deadline_working_days", "approver_count", "client_budget",
+             "acceptance_criteria", "change_boundary")
     fields = []
     for name in names:
         value = overrides.get(name)
@@ -261,6 +262,10 @@ async def estimate(analysis_id: str, body: EstimateBody, request: Request):
             "whatsapp": parts["whatsapp"], "decline_message": parts["decline"],
             "cost_profile": {**body.cost_profile.model_dump(), "cost_per_hour": round(cph) if cph else None},
             "scope_used": scope, "calibration_trace": calibration_trace, "updated_at": iso(now_utc()),
+            "deal_terms": {
+                "acceptance_criteria": body.scope_overrides.get("acceptance_criteria"),
+                "change_boundary": body.scope_overrides.get("change_boundary"),
+            },
         }},
     )
     return result

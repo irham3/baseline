@@ -85,3 +85,44 @@ def test_not_ready_to_quote_blocks_price_for_supported_profession():
     data = r.json()
     assert data["readiness_state"] == "not_ready_to_quote"
     assert data["price"] is None
+
+
+def test_acceptance_and_change_boundary_resolve_from_overrides():
+    headers = _guest_headers()
+    doc = _analyze("Need 10 Reels for a campaign, footage ready, budget 6M.", headers)
+
+    overrides = {
+        **FULLY_RESOLVED_OVERRIDES,
+        "acceptance_criteria": "approved once the final cut is delivered",
+        "change_boundary": "concept changes after approval are new scope",
+    }
+    r = client.post(f"/api/analysis/{doc['analysis_id']}/estimate", headers=headers, json={
+        "cost_profile": COST_PROFILE, "scope_overrides": overrides,
+    })
+    assert r.status_code == 200, r.text
+    data = r.json()
+    rule_ids = [i["rule_id"] for i in data["deal_issues"]]
+    assert "acceptance_criteria" not in rule_ids
+    assert "change_boundary" not in rule_ids
+    # Kedua field ini medium -> tidak boleh mengubah gerbang readiness.
+    assert data["readiness_state"] == "ready_to_estimate"
+
+
+def test_deal_terms_survive_reload():
+    """D10: nilai yang dideklarasikan user harus bertahan di GET setelah estimate,
+    karena build_scope() sengaja tidak membawanya di scope_used."""
+    headers = _guest_headers()
+    doc = _analyze("Need 10 Reels for a campaign, footage ready, budget 6M.", headers)
+    overrides = {
+        **FULLY_RESOLVED_OVERRIDES,
+        "acceptance_criteria": "approved once the final cut is delivered",
+        "change_boundary": "concept changes after approval are new scope",
+    }
+    client.post(f"/api/analysis/{doc['analysis_id']}/estimate", headers=headers, json={
+        "cost_profile": COST_PROFILE, "scope_overrides": overrides,
+    })
+    r = client.get(f"/api/analysis/{doc['analysis_id']}", headers=headers)
+    assert r.status_code == 200, r.text
+    terms = r.json().get("deal_terms") or {}
+    assert terms.get("acceptance_criteria") == "approved once the final cut is delivered"
+    assert terms.get("change_boundary") == "concept changes after approval are new scope"
