@@ -739,19 +739,20 @@ export default function Landing() {
             ].map((step, idx) => (
               <Reveal
                 key={step.n}
-                className={`step-card relative z-[1] rounded-[20px] p-6 ${idx === 1 ? "md:mt-6" : ""}`}
-                style={{ border: `1px solid ${T.cardBorder}`, background: T.cardBg }}
+                className={`relative z-[1] ${idx === 1 ? "md:mt-6" : ""}`}
                 delay={idx * 0.08}
               >
-                <div className="sticker mb-4 flex h-8 w-8 items-center justify-center rounded-lg text-[13px] font-extrabold" style={{ "--r": step.r, background: T.gradPrimary, color: T.btnPrimaryText, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.3), 0 6px 14px -4px rgba(16,185,129,0.35)" }}>{step.n}</div>
-                <div className="mb-4 rounded-[14px] p-3.5" style={{ border: `1px solid ${T.blackBoxBorder}`, background: T.blackBoxBg }}>
-                  {step.label && (
-                    <div className="mono mb-2 flex items-center gap-1.5 text-[9.5px] uppercase" style={{ color: T.inkFaint }}>{step.label}</div>
-                  )}
-                  {step.body}
-                </div>
-                <h3 className="mb-1.5 text-base font-bold tracking-[-0.01em]" style={{ color: T.ink }}>{step.title}</h3>
-                <p className="text-[12.5px] leading-relaxed" style={{ color: T.inkSoft }}>{step.desc}</p>
+                <CardElevated T={T} className="step-card p-6 rounded-[20px]">
+                  <div className="sticker mb-4 flex h-8 w-8 items-center justify-center rounded-lg text-[13px] font-extrabold" style={{ "--r": step.r, background: T.gradPrimary, color: T.btnPrimaryText, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.3), 0 6px 14px -4px rgba(16,185,129,0.35)" }}>{step.n}</div>
+                  <div className="mb-4 rounded-[14px] p-3.5" style={{ border: `1px solid ${T.blackBoxBorder}`, background: T.blackBoxBg }}>
+                    {step.label && (
+                      <div className="mono mb-2 flex items-center gap-1.5 text-[9.5px] uppercase" style={{ color: T.inkFaint }}>{step.label}</div>
+                    )}
+                    {step.body}
+                  </div>
+                  <h3 className="mb-1.5 text-base font-bold tracking-[-0.01em]" style={{ color: T.ink }}>{step.title}</h3>
+                  <p className="text-[12.5px] leading-relaxed" style={{ color: T.inkSoft }}>{step.desc}</p>
+                </CardElevated>
               </Reveal>
             ))}
           </div>

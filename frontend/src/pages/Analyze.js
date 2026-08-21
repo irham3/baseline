@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { PlayCircle, ArrowDown, ShieldCheck, RotateCcw, CircleCheck, TriangleAlert } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { SEO } from "@/components/SEO";
@@ -71,6 +71,7 @@ function useInViewOnce(amount = 0.4) {
 
 export default function Analyze() {
   const [scopeRef, scopeInView] = useInViewOnce(0.4);
+  const reduceMotion = useReducedMotion();
   const [dark, setDark] = useState(() => {
     try {
       return localStorage.getItem(THEME_KEY) !== "light";
@@ -144,10 +145,15 @@ export default function Analyze() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay: 0.12 }}
           >
-            <div className="rounded-2xl p-4.5" style={{ border: `1px solid ${T.cardBorder}`, background: T.cardBg }}>
+            <motion.div
+              className="rounded-2xl p-4.5"
+              style={{ borderWidth: 1, borderStyle: "solid", borderColor: T.cardBorder, background: T.cardBg }}
+              whileHover={reduceMotion ? undefined : { y: -4, borderColor: T.accent, boxShadow: "0 20px 40px -20px rgba(0,0,0,0.28)" }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            >
               <span className="mono text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: T.inkFaint }}>Messy brief in</span>
               <p className="mt-2 text-[13px] italic leading-relaxed" style={{ color: T.inkSoft }}>&ldquo;need 12 reels, budget 3M, done next week, revisions until it feels right, I&rsquo;ll send footage later&rdquo;</p>
-            </div>
+            </motion.div>
 
             <div className="flex justify-center">
               <ArrowDown size={20} style={{ color: T.accent }} strokeWidth={1.75} />
@@ -160,8 +166,9 @@ export default function Analyze() {
               <motion.div
                 initial={{ clipPath: "polygon(0% 0%, -10% 0%, 10% 100%, 0% 100%)" }}
                 animate={scopeInView ? { clipPath: "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)" } : undefined}
+                whileHover={reduceMotion ? undefined : { y: -4, borderColor: T.accent, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06), 0 24px 44px -20px rgba(0,0,0,0.28)", transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } }}
                 transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
-                className="relative rounded-2xl p-5" style={{ border: `1px solid ${T.proofBorder}`, background: T.proofBg, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 16px 36px -20px rgba(0,0,0,0.2)" }}>
+                className="relative rounded-2xl p-5" style={{ borderWidth: 1, borderStyle: "solid", borderColor: T.proofBorder, background: T.proofBg, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 16px 36px -20px rgba(0,0,0,0.2)" }}>
                 <span className="mono text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: T.accent }}>Structured scope out</span>
                 <div className="mt-3 flex flex-col gap-2.5">
                   <div className="flex items-center justify-between text-[12.5px]" style={{ color: T.rowText }}>Deliverables <span className="mono font-bold" style={{ color: T.ink }}>12 Reels</span></div>
@@ -185,10 +192,16 @@ export default function Analyze() {
             { Icon: ShieldCheck, text: "Contact details redacted before AI sees it" },
             { Icon: RotateCcw, text: "Deterministic fallback if AI is unavailable" },
           ].map(({ Icon, text }) => (
-            <div key={text} className="flex items-center gap-3 rounded-2xl px-5 py-4.5" style={{ border: `1px solid ${T.cardBorder}`, background: T.cardBg }}>
+            <motion.div
+              key={text}
+              className="flex items-center gap-3 rounded-2xl px-5 py-4.5"
+              style={{ borderWidth: 1, borderStyle: "solid", borderColor: T.cardBorder, background: T.cardBg }}
+              whileHover={reduceMotion ? undefined : { y: -4, borderColor: T.accent, boxShadow: "0 20px 40px -20px rgba(0,0,0,0.28)" }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            >
               <Icon size={20} className="flex-shrink-0" style={{ color: T.accent }} strokeWidth={1.75} />
               <span className="text-[13px]" style={{ color: T.rowText }}>{text}</span>
-            </div>
+            </motion.div>
           ))}
         </div>
       </div>
