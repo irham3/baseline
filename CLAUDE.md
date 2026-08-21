@@ -69,6 +69,7 @@ Semua di bawah ini **sudah di-push ke `origin/rifqi`**, sudah lolos 88 unit test
    - Durasi hardcode "45 seconds" di draft WhatsApp & Agreement Sheet publik (sekarang ikut brief asli)
    - **Agreement Sheet yang di-revoke freelancer tetap tampil aktif di sisi klien** (`STATUS` map di `Agreement.js` tidak punya entry `REVOKED` → fallback ke "Waiting for response", tombol Approve/dll masih aktif). Backend sudah benar-benar menolak (bukan celah keamanan), tapi UX-nya menyesatkan. *(commit `cca42b28`)*
    - **Pesan error login/register jadi basi (stale)** kalau submit berikutnya diblokir validasi HTML5 native browser (mis. format email salah tanpa `@`) — `setError(null)` cuma jalan di dalam submit handler yang tidak pernah kepanggil. Fix: error di-clear di setiap `onChange` field, bukan cuma di submit. *(commit `09db806b`)*
+8. **Polish**: pesan validasi password pendek diganti dari raw teks Pydantic ("String should have at least 6 characters") jadi "Password must be at least 6 characters." — ditawarkan ke user, dikonfirmasi mau, sudah dikerjakan. *(commit `d75ea72a`)*
 
 ### Yang sudah didogfooding manual dan TERBUKTI tidak ada bug
 
@@ -77,7 +78,6 @@ Landing, Judge Mode (8 step penuh), Analyze dengan brief custom Bahasa Indonesia
 ### Yang masih terbuka (bukan bug, murni keputusan)
 
 - **`memory/test_credentials.md` di branch `master`** — masih ada password test dummy plaintext (`raka@baseline.app` / `baseline123`), sudah ada dari commit awal sebelum Claude ikut kerja. **Sengaja ditunda** atas permintaan user ("ini nanti dulu aja", 2026-08-21) — belum disentuh karena itu di `master`, bukan `rifqi`.
-- **Pesan validasi password pendek masih raw teks Pydantic** ("String should have at least 6 characters" alih-alih bahasa yang lebih ramah). Ditawarkan ke user untuk diperhalus, belum ada keputusan — cek dulu sebelum mengerjakan.
 - **PR #1 belum di-review owner** — tidak ada aksi yang perlu diambil Claude, tinggal tunggu.
 
 ### Catatan teknis penting
