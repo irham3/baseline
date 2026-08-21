@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, Clock, RefreshCw, Film, Ban } from "lucide-react";
+import { Check, Clock, RefreshCw, Film, Ban, TriangleAlert } from "lucide-react";
 import { idr, plural, revisionPhrase } from "@/lib/format";
 import { SpotlightCard } from "@/components/ui/primitives";
 
@@ -9,6 +9,23 @@ function Line({ icon: Icon, children }) {
       <Icon size={14} className="mt-0.5 shrink-0 text-green" />
       <span>{children}</span>
     </li>
+  );
+}
+
+function NoViableScopeCard({ opt }) {
+  return (
+    <div
+      className="card relative flex flex-col border-dashed border-amber/50 bg-amber-soft/30 p-5 text-left"
+      data-testid={`option-${opt.id}`}
+    >
+      <div className="flex items-center gap-2">
+        <TriangleAlert size={16} className="text-amber" />
+        <span className="text-[11px] font-bold text-ink-faint">Option {opt.id}</span>
+      </div>
+      <h4 className="mt-1.5 text-[15px] font-bold text-ink">{opt.title}</h4>
+      <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">{opt.note}</p>
+      <p className="mt-3 text-[12px] font-semibold text-amber">Recommended: decline, ask for a revised budget, or clarify scope further.</p>
+    </div>
   );
 }
 
@@ -56,9 +73,13 @@ export default function DealOptions({ options, selectedId, onSelect, onDecline, 
   return (
     <div data-testid="deal-options">
       <div className="grid gap-4 md:grid-cols-3">
-        {options.map((opt) => (
-          <OptionCard key={opt.id} opt={opt} selected={selectedId === opt.id} onSelect={onSelect} />
-        ))}
+        {options.map((opt) =>
+          opt.type === "no_viable_scope" || opt.price == null ? (
+            <NoViableScopeCard key={opt.id} opt={opt} />
+          ) : (
+            <OptionCard key={opt.id} opt={opt} selected={selectedId === opt.id} onSelect={onSelect} />
+          )
+        )}
       </div>
       <div className="mt-3 flex items-center justify-between rounded-xl border border-dashed border-line bg-raised px-4 py-3">
         <p className="text-[13px] text-ink-faint">Not taking this project?</p>

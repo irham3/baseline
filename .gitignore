@@ -5,4 +5,13 @@ credentials.json
 *.pem
 *.key
 .credentials
+/docs
+node_modules/
 frontend/node_modules/
+frontend/build/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+backend/.venv/
+.vscode/

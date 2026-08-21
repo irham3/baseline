@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#116348" />
 
+    <!-- Content-Security-Policy: 'self' plus the specific third parties this app
+         actually calls (Google Identity Services + fonts). connect-src stays broad
+         (https: plus http://localhost:* for local dev against a plain-http backend)
+         because the API origin is set per-deployment via REACT_APP_BACKEND_URL and
+         this static file can't be templated per environment; pin it to the exact API
+         origin once that's fixed for a given deployment. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https: http://localhost:*; frame-src https://accounts.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';" />
+
     <!-- Primary Meta Tags -->
     <title>Baseline Work — Pre-deal Scope Checks & Price Floor for Freelancers</title>
     <meta name="title" content="Baseline Work — Pre-deal Scope Checks & Price Floor for Freelancers" />

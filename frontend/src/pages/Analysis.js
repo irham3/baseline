@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { TriangleAlert, Link2, ExternalLink, Copy, Check, ArrowLeft } from "lucide-react";
+import { TriangleAlert, Link2, ExternalLink, Copy, Check, ArrowLeft, Ban, Search } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { SEO } from "@/components/SEO";
 import { Spinner, Badge, Toast } from "@/components/ui/primitives";
@@ -13,6 +13,7 @@ import WhatsAppPreview, { useClipboard } from "@/components/WhatsAppPreview";
 import CostProfileForm, { DEMO_COST_PROFILE } from "@/components/CostProfileForm";
 import { useAuth } from "@/context/AuthContext";
 import { client, apiErrorMessage, track } from "@/lib/api";
+import { idr } from "@/lib/format";
 
 function toNum(v) {
   const n = Number(v);
@@ -49,6 +50,7 @@ export default function Analysis() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { state: copyState, copy } = useClipboard();
+  const { state: scopeCopyState, copy: copyScopeReply } = useClipboard();
 
   const [analysis, setAnalysis] = useState(null);
   const [loadErr, setLoadErr] = useState(null);
@@ -70,6 +72,15 @@ export default function Analysis() {
   const [projectTitle, setProjectTitle] = useState("");
   const [agreement, setAgreement] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [polishedDrafts, setPolishedDrafts] = useState(null);
+  const [polishing, setPolishing] = useState(false);
+  const [polishError, setPolishError] = useState(null);
+  const [scopeCheckText, setScopeCheckText] = useState("");
+  const [scopeChecking, setScopeChecking] = useState(false);
+  const [scopeCheckResult, setScopeCheckResult] = useState(null);
+  const [scopeCheckError, setScopeCheckError] = useState(null);
   const [toast, setToast] = useState("");
 
   useEffect(() => {
@@ -118,7 +129,26 @@ export default function Analysis() {
   const selectOption = (opt) => {
     setDeclineMode(false);
     setSelected(opt.id);
+    setPolishedDrafts(null); // stale once the underlying option/numbers change
     track("option_selected", { analysis_id: id, option: opt.id });
+  };
+
+  const polishWithAi = async () => {
+    if (!result?.options || result.options.length < 2) return;
+    setPolishing(true);
+    setPolishError(null);
+    try {
+      const { data } = await client.post(`/analysis/${id}/deal-copy`, {
+        scope_overrides: overrides,
+        options: result.options,
+      });
+      setPolishedDrafts(data.whatsapp);
+      track("whatsapp_polished", { analysis_id: id });
+    } catch (e) {
+      setPolishError(apiErrorMessage(e.response?.data?.detail) || "Could not polish with AI. The template draft below is still fine to send.");
+    } finally {
+      setPolishing(false);
+    }
   };
 
   const createAgreement = async () => {
@@ -137,6 +167,40 @@ export default function Analysis() {
       setTimeout(() => setToast(""), 3000);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const revokeAgreement = async () => {
+    if (!agreement) return;
+    setRevoking(true);
+    try {
+      await client.post(`/analysis/${id}/agreement/${agreement.token}/revoke`);
+      setAgreement(null);
+      setProjectTitle("");
+      setConfirmRevoke(false);
+      track("agreement_revoked", { analysis_id: id });
+      setToast("Link revoked. Clients can no longer respond to it.");
+      setTimeout(() => setToast(""), 3000);
+    } catch (e) {
+      setToast(apiErrorMessage(e.response?.data?.detail) || "Failed to revoke the link.");
+      setTimeout(() => setToast(""), 3000);
+    } finally {
+      setRevoking(false);
+    }
+  };
+
+  const runScopeCheck = async () => {
+    if (!scopeCheckText.trim()) return;
+    setScopeChecking(true);
+    setScopeCheckError(null);
+    try {
+      const { data } = await client.post(`/analysis/${id}/scope-check`, { new_request: scopeCheckText });
+      setScopeCheckResult(data);
+      track("scope_check_run", { analysis_id: id });
+    } catch (e) {
+      setScopeCheckError(apiErrorMessage(e.response?.data?.detail) || "Scope Check failed. Please try again.");
+    } finally {
+      setScopeChecking(false);
     }
   };
 
@@ -177,7 +241,13 @@ export default function Analysis() {
         </button>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-extrabold text-ink">Brief Map</h1>
-          {analysis.is_demo && <Badge tone="amber">Demo</Badge>}
+          {analysis.is_demo && <Badge tone="amber" data-testid="provenance-demo">Demo data</Badge>}
+          {!analysis.is_demo && analysis.provenance === "ai" && (
+            <Badge tone="green" data-testid="provenance-ai">AI extraction</Badge>
+          )}
+          {!analysis.is_demo && analysis.provenance === "heuristic_fallback" && (
+            <Badge tone="neutral" data-testid="provenance-fallback">Deterministic fallback (no AI)</Badge>
+          )}
         </div>
 
         {/* Redacted brief */}
@@ -255,12 +325,32 @@ export default function Analysis() {
             </div>
 
             <div className="mt-5 grid gap-6 lg:grid-cols-2">
-              <WhatsAppPreview
-                drafts={result.whatsapp}
-                declineMode={declineMode}
-                declineMessage={result.decline_message}
-                onCopy={() => track("whatsapp_copied", { analysis_id: id, decline: declineMode })}
-              />
+              <div>
+                {!declineMode && (
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <button onClick={polishWithAi} disabled={polishing} className="btn-secondary btn-sm" data-testid="polish-with-ai">
+                      {polishing ? <><Spinner size={13} /> Polishing...</> : <>✨ Polish with AI</>}
+                    </button>
+                    {polishedDrafts && (
+                      <>
+                        <Badge tone="green">AI-polished</Badge>
+                        <button onClick={() => setPolishedDrafts(null)} className="text-[12px] font-semibold text-ink-faint hover:text-ink">Use template instead</button>
+                      </>
+                    )}
+                    {polishError && (
+                      <span className="text-[12px] font-semibold text-danger" data-testid="polish-error">
+                        {polishError} <button onClick={polishWithAi} className="underline underline-offset-2">Retry</button>
+                      </span>
+                    )}
+                  </div>
+                )}
+                <WhatsAppPreview
+                  drafts={polishedDrafts || result.whatsapp}
+                  declineMode={declineMode}
+                  declineMessage={result.decline_message}
+                  onCopy={() => track("whatsapp_copied", { analysis_id: id, decline: declineMode })}
+                />
+              </div>
 
               {/* Agreement Sheet creation */}
               {!declineMode && (
@@ -281,6 +371,19 @@ export default function Analysis() {
                         <a href={`/s/${agreement.token}`} target="_blank" rel="noreferrer" className="btn-primary btn-sm" data-testid="open-agreement">
                           Open <ExternalLink size={14} />
                         </a>
+                        {!confirmRevoke ? (
+                          <button onClick={() => setConfirmRevoke(true)} className="btn-ghost btn-sm text-danger" data-testid="revoke-agreement">
+                            <Ban size={14} /> Revoke
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-2 rounded-xl border border-danger/30 bg-danger/5 px-3 py-1.5" data-testid="revoke-confirm">
+                            <span className="text-[12px] font-medium text-danger">Revoke this link? The client won't be able to respond anymore.</span>
+                            <button onClick={revokeAgreement} disabled={revoking} className="btn-danger btn-sm">
+                              {revoking ? <Spinner size={13} /> : "Confirm"}
+                            </button>
+                            <button onClick={() => setConfirmRevoke(false)} disabled={revoking} className="btn-ghost btn-sm">Cancel</button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -302,6 +405,67 @@ export default function Analysis() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {agreement && (
+          <div className="mt-8 card p-5" data-testid="scope-check-panel">
+            <h2 className="flex items-center gap-2 text-xl font-extrabold text-ink"><Search size={18} className="text-green" /> Scope Check</h2>
+            <p className="mt-1 text-ink-soft">Client asking for something extra after sending the Agreement Sheet? Paste the request to check whether it's already included, a revision, or new scope.</p>
+            <textarea
+              name="scope-check-input"
+              className="textarea mt-4 min-h-[80px]"
+              placeholder={'e.g. "Bisa tambahin 2 video lagi ga? sama warnanya diganti jadi lebih cerah"'}
+              value={scopeCheckText}
+              onChange={(e) => setScopeCheckText(e.target.value)}
+              disabled={scopeChecking}
+              data-testid="scope-check-textarea"
+            />
+            <button onClick={runScopeCheck} disabled={scopeChecking || !scopeCheckText.trim()} className="btn-primary btn-md mt-3" data-testid="scope-check-run">
+              {scopeChecking ? <><Spinner size={16} /> Checking...</> : "Check scope"}
+            </button>
+
+            {scopeCheckError && (
+              <div className="mt-4 flex items-start gap-2 rounded-xl border border-danger/30 bg-danger/5 p-3.5 text-[13px] text-danger" data-testid="scope-check-error">
+                <TriangleAlert size={16} className="mt-0.5 shrink-0" />
+                <div>
+                  {scopeCheckError}
+                  <button onClick={runScopeCheck} className="ml-2 font-bold underline underline-offset-2">Retry</button>
+                </div>
+              </div>
+            )}
+
+            {scopeCheckResult && (
+              <div className="mt-4 space-y-3" data-testid="scope-check-result">
+                <Badge tone={
+                  scopeCheckResult.classification === "included" ? "green" :
+                  scopeCheckResult.classification === "revision" ? "amber" :
+                  scopeCheckResult.classification === "new_scope" ? "danger" : "neutral"
+                }>
+                  {{
+                    included: "Included in scope",
+                    revision: "Covered as a revision",
+                    new_scope: "New scope — needs a fee adjustment",
+                    unclear: "Unclear — needs clarification",
+                  }[scopeCheckResult.classification] || scopeCheckResult.classification}
+                </Badge>
+                <p className="text-[13px] text-ink-soft">{scopeCheckResult.explanation}</p>
+                {scopeCheckResult.delta_result && (
+                  <p className="text-[13px] font-semibold text-ink">
+                    Adds about {scopeCheckResult.delta_result.price_delta_low != null ? idr(scopeCheckResult.delta_result.price_delta_low) : "-"} to {scopeCheckResult.delta_result.price_delta_high != null ? idr(scopeCheckResult.delta_result.price_delta_high) : "-"}.
+                  </p>
+                )}
+                <div className="rounded-xl bg-raised p-3.5">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="text-[12px] font-bold text-ink-faint">Suggested reply</span>
+                    <button onClick={() => copyScopeReply(scopeCheckResult.whatsapp)} className="btn-secondary btn-sm">
+                      {scopeCopyState === "ok" ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy</>}
+                    </button>
+                  </div>
+                  <p className="whitespace-pre-wrap text-[13px] text-ink-soft">{scopeCheckResult.whatsapp}</p>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

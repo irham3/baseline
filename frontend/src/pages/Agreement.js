@@ -13,6 +13,7 @@ const STATUS = {
   APPROVED: { tone: "green", label: "Approved" },
   CHANGE_REQUESTED: { tone: "amber", label: "Changes requested" },
   EXPIRED: { tone: "danger", label: "Expired" },
+  REVOKED: { tone: "danger", label: "Revoked" },
 };
 
 function Row({ icon: Icon, label, value }) {
@@ -78,6 +79,7 @@ export default function Agreement() {
   const s = data.snapshot;
   const status = STATUS[data.status] || STATUS.SENT;
   const expired = data.status === "EXPIRED";
+  const revoked = data.status === "REVOKED";
   const answered = done || data.status === "APPROVED" || data.status === "CHANGE_REQUESTED";
 
   return (
@@ -135,11 +137,17 @@ export default function Agreement() {
             <div className="card mt-5 flex items-center gap-3 p-5" data-testid="agreement-answered">
               <CheckCircle2 className="text-green" size={22} />
               <p className="font-semibold text-ink">
-                {data.status === "APPROVED" ? "Thank you. This offer has been approved." : "Your change request has been sent. The freelancer will contact you."}
+                {data.status === "APPROVED"
+                  ? "Thank you. This offer has been approved."
+                  : done === "ask_question"
+                  ? "Your question has been sent. The freelancer will get back to you."
+                  : "Your change request has been sent. The freelancer will contact you."}
               </p>
             </div>
           ) : expired ? (
             <div className="card mt-5 p-5 text-center text-ink-soft" data-testid="agreement-expired">This offer has expired. Contact the freelancer for a new offer.</div>
+          ) : revoked ? (
+            <div className="card mt-5 p-5 text-center text-ink-soft" data-testid="agreement-revoked">This offer has been withdrawn by the freelancer. Contact them for a new offer.</div>
           ) : (
             <div className="mt-5" data-testid="agreement-actions">
               {showNote && (

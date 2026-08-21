@@ -5,6 +5,8 @@ import { client } from "@/lib/api";
 import { Spinner } from "@/components/ui/primitives";
 
 import Landing from "@/pages/Landing";
+import Judge from "@/pages/Judge";
+import Analyze from "@/pages/Analyze";
 import Analysis from "@/pages/Analysis";
 import Agreement from "@/pages/Agreement";
 import Login from "@/pages/Login";
@@ -97,6 +99,8 @@ function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
+      <Route path="/judge" element={<Judge />} />
+      <Route path="/analyze" element={<Analyze />} />
       <Route path="/analysis/:id" element={<Analysis />} />
       <Route path="/s/:token" element={<Agreement />} />
       <Route path="/agreement/:token" element={<Agreement />} />

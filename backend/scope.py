@@ -14,7 +14,11 @@ import pricing
 
 PROFESSION = "short_form_video"
 
-# 15 required fields for scope-completeness accounting.
+# Required fields for scope-completeness accounting. Every field here is wired into
+# hours, price, risk triggers, or timeline (see pricing.estimate_hours / risk_triggers /
+# project_timeline). Fields the engine never uses for a number (e.g. feedback_method,
+# source_file_handover) are intentionally excluded from P0 completeness -- they stay
+# informational-only on the Brief Map instead of being asked as a high-priority gate.
 REQUIRED_FIELDS = [
     "quantity",
     "final_duration",
@@ -27,22 +31,37 @@ REQUIRED_FIELDS = [
     "motion_level",
     "approver_count",
     "revision_rounds",
-    "deadline",
+    "deadline_working_days",
     "client_budget",
-    "feedback_method",
-    "source_file_handover",
 ]
 
 RESOLVED_STATUSES = {"stated", "inferred"}
 
 
+def compute_scope_completeness(overrides: dict) -> dict:
+    """The single, consistent completeness calculation used by both the live estimate
+    flow and the seeded demo. A required field counts as resolved only when it carries
+    an actual (non-null, non-empty) value in the raw scope-override dict -- values that
+    build_scope() fills in as defaults do not count, so silent assumptions are never
+    presented as resolved facts. No hidden offsets or hardcoded counts."""
+    resolved = sum(1 for name in REQUIRED_FIELDS if overrides.get(name) not in (None, ""))
+    return pricing.scope_completeness(resolved, len(REQUIRED_FIELDS))
+
+
 # --------------------------------------------------------------------------
-# PII redaction
+# PII redaction (best-effort, not guaranteed complete -- see product copy)
 # --------------------------------------------------------------------------
 _EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
 # Indonesian mobile numbers: +62/62/0 followed by 8xx and 7-12 more digits, allowing
 # spaces/dashes as separators.
 _PHONE_RE = re.compile(r"(?:\+62|62|0)8[\d\-\s]{7,13}\d")
+_URL_RE = re.compile(r"\b(?:https?://|www\.)\S+", re.IGNORECASE)
+# Social handles: @username (Instagram/Twitter/Telegram style). Applied after email
+# redaction so an email's local part is never mistaken for a handle.
+_HANDLE_RE = re.compile(r"(?<!\w)@[A-Za-z0-9_.]{2,30}\b")
+# Long contiguous digit runs (10-16 digits) that look like a bank/account number.
+# Shorter runs (phone numbers, budgets like "3000000") are left alone.
+_BANK_ACCOUNT_RE = re.compile(r"(?<!\d)\d{10,16}(?!\d)")
 
 
 def redact_pii(text: str) -> dict:
@@ -52,34 +71,62 @@ def redact_pii(text: str) -> dict:
     phones = len(_PHONE_RE.findall(redacted))
     redacted = _PHONE_RE.sub("[phone redacted]", redacted)
 
-    return {"text": redacted, "emails_found": emails, "phones_found": phones, "total": emails + phones}
+    urls = len(_URL_RE.findall(redacted))
+    redacted = _URL_RE.sub("[link redacted]", redacted)
+
+    handles = len(_HANDLE_RE.findall(redacted))
+    redacted = _HANDLE_RE.sub("[handle redacted]", redacted)
+
+    accounts = len(_BANK_ACCOUNT_RE.findall(redacted))
+    redacted = _BANK_ACCOUNT_RE.sub("[account number redacted]", redacted)
+
+    total = emails + phones + urls + handles + accounts
+    return {
+        "text": redacted,
+        "emails_found": emails,
+        "phones_found": phones,
+        "urls_found": urls,
+        "handles_found": handles,
+        "accounts_found": accounts,
+        "total": total,
+    }
 
 
 # --------------------------------------------------------------------------
-# Buffer derivation (named, explainable)
+# Buffer derivation (named, explainable, scale-aware)
 # --------------------------------------------------------------------------
-def derive_buffers(scope: dict) -> list[dict]:
+# Each buffer is: a percentage of labor cost, floored at a minimum nominal amount, and
+# capped so it never dominates the price floor on very large projects. Percentages,
+# minimums, and caps are configurable operational assumptions, not universal constants.
+def _pct_buffer(labor_cost: float, percent: float, minimum: int, cap: int, label: str) -> dict:
+    amount = max(minimum, labor_cost * percent)
+    amount = min(amount, cap)
+    return {"label": f"{label} ({percent:.0%} of labor, min {format_idr(minimum)}, cap {format_idr(cap)})",
+            "amount": round(amount)}
+
+
+def derive_buffers(scope: dict, labor_cost: float = 0.0) -> list[dict]:
     buffers: list[dict] = []
     if scope.get("footage_available") and not scope.get("footage_preselected"):
-        buffers.append({"label": "Footage dependency buffer", "amount": 250000})
+        buffers.append(_pct_buffer(labor_cost, 0.08, 150_000, 750_000, "Footage dependency buffer"))
     if int(scope.get("approver_count") or 1) >= 2:
-        buffers.append({"label": "Multi-approver buffer", "amount": 150000})
+        buffers.append(_pct_buffer(labor_cost, 0.05, 100_000, 500_000, "Multi-approver buffer"))
     if scope.get("rush"):
-        buffers.append({"label": "Rush contingency", "amount": 300000})
+        buffers.append(_pct_buffer(labor_cost, 0.15, 200_000, 1_000_000, "Rush contingency"))
     if not buffers:
-        buffers.append({"label": "Base contingency", "amount": 150000})
+        buffers.append(_pct_buffer(labor_cost, 0.05, 100_000, 400_000, "Base contingency"))
     return buffers
 
 
-def format_idr(amount) -> str:
-    if amount is None:
-        return "not available"
+def _labor_cost_mid(est: dict, cost_per_hour: float) -> float:
+    return (est["low"] + est["high"]) / 2 * cost_per_hour
+
+
+def format_idr(amount: float) -> str:
     return "IDR " + f"{int(round(amount)):,}"
 
 
-def format_idr_compact(amount) -> str:
-    if amount is None:
-        return "not available"
+def format_idr_compact(amount: float) -> str:
     return f"IDR {amount / 1_000_000:.1f}M"
 
 
@@ -95,39 +142,78 @@ def revision_phrase(rounds: int, consolidated: bool = False) -> str:
 # --------------------------------------------------------------------------
 # Deal-option builder (deterministic)
 # --------------------------------------------------------------------------
-def _fit_quantity_to_budget(scope: dict, cost_per_hour: float, target_margin: float, client_budget: float) -> tuple[int, dict, bool]:
-    """Option A helper: shrink quantity to the largest whose HIGH price floor fits the budget.
-    Returns (chosen_qty, price_info, viable). viable is False when even one unit is above budget."""
+def _largest_viable_quantity(
+    scope: dict, cost_per_hour: float, target_margin: float, client_budget: float
+) -> tuple[Optional[int], Optional[dict], Optional[dict]]:
+    """Option A helper: search for the largest quantity (down to 1) whose price floor
+    fits the client budget. Returns (qty, estimate, price_info); (None, None, None) when
+    even a single unit's price floor exceeds the budget -- no scope fits."""
     base = {**scope, "footage_preselected": True, "revision_rounds": 1, "motion_level": "none"}
-    chosen_qty, info, viable = 1, None, False
-    for qty in range(int(scope.get("quantity") or 0), 0, -1):
+    max_qty = int(scope.get("quantity") or 0)
+    for qty in range(max_qty, 0, -1):
         trial = {**base, "quantity": qty}
         est = pricing.estimate_hours(trial)
         info = pricing.price_estimate(
             est["low"], est["high"], cost_per_hour, 0.0,
-            derive_buffers(trial), target_margin, client_budget,
+            derive_buffers(trial, _labor_cost_mid(est, cost_per_hour)), target_margin, client_budget,
         )
-        chosen_qty = qty
         if info["price_floor_high"] <= client_budget:
-            viable = True
-            break
-    return chosen_qty, info, viable
+            return qty, est, info
+    return None, None, None
 
 
 def build_options(scope: dict, cost_per_hour: float, target_margin: float, client_budget: float) -> list[dict]:
     options: list[dict] = []
 
-    # ---- Option A: keep budget, shrink scope (only when a viable quantity exists) ----
-    chosen_qty, a_price_info, a_viable = _fit_quantity_to_budget(scope, cost_per_hour, target_margin, client_budget)
-    if a_viable:
+    # ---- Option A: keep budget, shrink scope (or report no viable scope) ----
+    chosen_qty, a_est, a_price_info = _largest_viable_quantity(scope, cost_per_hour, target_margin, client_budget)
+    if chosen_qty is None:
+        # Even a single video's price floor exceeds the budget. Do not fabricate a
+        # budget-fit option -- surface the gap and a recommended next step instead.
+        floor_trial = {**scope, "quantity": 1, "footage_preselected": True,
+                        "revision_rounds": 1, "motion_level": "none"}
+        floor_est = pricing.estimate_hours(floor_trial)
+        floor_info = pricing.price_estimate(
+            floor_est["low"], floor_est["high"], cost_per_hour, 0.0,
+            derive_buffers(floor_trial, _labor_cost_mid(floor_est, cost_per_hour)),
+            target_margin, client_budget,
+        )
+        options.append({
+            "id": "A",
+            "type": "no_viable_scope",
+            "title": "No viable scope at this budget",
+            "price": None,
+            "quantity": 0,
+            "final_duration": scope.get("final_duration"),
+            "timeline_days": None,
+            "timeline_trace": None,
+            "revision_rounds": 0,
+            "footage_selection_included": False,
+            "subtitles": True,
+            "recommendation": "decline_or_revise_budget",
+            "price_floor_low": floor_info["price_floor_low"],
+            "price_floor_high": floor_info["price_floor_high"],
+            "note": (
+                f"Even a single video's price floor ({format_idr_compact(floor_info['price_floor_low'])} "
+                f"to {format_idr_compact(floor_info['price_floor_high'])}) is above the "
+                f"{format_idr_compact(client_budget)} budget. Recommend declining, asking for a revised "
+                "budget, or clarifying scope further before quoting."
+            ),
+        })
+    else:
+        a_timeline = pricing.project_timeline(
+            a_est["high"], footage_preselected=True, revision_rounds=1,
+            approver_count=int(scope.get("approver_count") or 1), rush=False,
+        )
         options.append({
             "id": "A",
             "type": "budget_fixed",
-            "viable": True,
             "title": "Keep budget, reduce scope",
             "price": int(round(client_budget)),
             "quantity": chosen_qty,
-            "timeline_days": 10,
+            "final_duration": scope.get("final_duration"),
+            "timeline_days": a_timeline["total_days"],
+            "timeline_trace": a_timeline["trace"],
             "revision_rounds": 1,
             "footage_selection_included": False,
             "subtitles": True,
@@ -136,25 +222,6 @@ def build_options(scope: dict, cost_per_hour: float, target_margin: float, clien
             "price_floor_high": a_price_info["price_floor_high"],
             "note": f"Keeps the client budget by reducing to {chosen_qty} {plural(chosen_qty, 'video')} and {revision_phrase(1)}.",
         })
-    else:
-        # No quantity (not even a single video) has a price floor within the budget.
-        options.append({
-            "id": "A",
-            "type": "no_viable_scope",
-            "viable": False,
-            "title": "No scope fits this budget",
-            "price": None,
-            "quantity": chosen_qty,
-            "timeline_days": None,
-            "revision_rounds": 1,
-            "footage_selection_included": False,
-            "subtitles": True,
-            "exclusions": [],
-            "price_floor_low": a_price_info["price_floor_low"],
-            "price_floor_high": a_price_info["price_floor_high"],
-            "note": (f"Even a single video's price floor (from {format_idr_compact(a_price_info['price_floor_low'])}) "
-                     f"is above the client budget. Recommend declining or renegotiating the budget."),
-        })
 
     # ---- Option B: keep scope, normal timeline, defensible price ----
     b_scope = {**scope, "footage_preselected": False, "rush": False,
@@ -162,17 +229,22 @@ def build_options(scope: dict, cost_per_hour: float, target_margin: float, clien
     b_est = pricing.estimate_hours(b_scope)
     b_info = pricing.price_estimate(
         b_est["low"], b_est["high"], cost_per_hour, 0.0,
-        derive_buffers(b_scope), target_margin, client_budget,
+        derive_buffers(b_scope, _labor_cost_mid(b_est, cost_per_hour)), target_margin, client_budget,
     )
     b_price = pricing.round_to((b_info["price_floor_low"] + b_info["price_floor_high"]) / 2, 250000)
+    b_timeline = pricing.project_timeline(
+        b_est["high"], footage_preselected=False, revision_rounds=b_scope["revision_rounds"],
+        approver_count=int(scope.get("approver_count") or 1), rush=False,
+    )
     options.append({
         "id": "B",
         "type": "scope_fixed_normal",
-        "viable": True,
         "title": "Keep scope, normal timeline",
         "price": b_price,
         "quantity": int(scope.get("quantity") or 0),
-        "timeline_days": 21,
+        "final_duration": scope.get("final_duration"),
+        "timeline_days": b_timeline["total_days"],
+        "timeline_trace": b_timeline["trace"],
         "revision_rounds": b_scope["revision_rounds"],
         "footage_selection_included": True,
         "subtitles": True,
@@ -187,18 +259,23 @@ def build_options(scope: dict, cost_per_hour: float, target_margin: float, clien
     c_est = pricing.estimate_hours(c_scope)
     c_info = pricing.price_estimate(
         c_est["low"], c_est["high"], cost_per_hour, 0.0,
-        derive_buffers(c_scope), target_margin, client_budget,
+        derive_buffers(c_scope, _labor_cost_mid(c_est, cost_per_hour)), target_margin, client_budget,
     )
     rush_price = pricing.round_to(c_info["price_floor_high"] * 1.13, 250000)
     rush_premium = rush_price - b_price
+    c_timeline = pricing.project_timeline(
+        c_est["high"], footage_preselected=False, revision_rounds=1,
+        approver_count=int(scope.get("approver_count") or 1), rush=True,
+    )
     options.append({
         "id": "C",
         "type": "scope_fixed_rush",
-        "viable": True,
         "title": "Keep scope, rush premium",
         "price": rush_price,
         "quantity": int(scope.get("quantity") or 0),
-        "timeline_days": 7,
+        "final_duration": scope.get("final_duration"),
+        "timeline_days": c_timeline["total_days"],
+        "timeline_trace": c_timeline["trace"],
         "revision_rounds": 1,
         "footage_selection_included": True,
         "subtitles": True,
@@ -216,8 +293,13 @@ def build_options(scope: dict, cost_per_hour: float, target_margin: float, clien
 # --------------------------------------------------------------------------
 # English copy templates (deterministic; fully editable client-side)
 # --------------------------------------------------------------------------
+def _duration_phrase(opt: dict) -> str:
+    d = opt.get("final_duration")
+    return f"up to {int(round(float(d)))} seconds each" if d else "final duration to be confirmed"
+
+
 def _deliverable_line(opt: dict) -> str:
-    line = f"{opt['quantity']} vertical videos (up to 45 seconds each)"
+    line = f"{opt['quantity']} vertical videos ({_duration_phrase(opt)})"
     if opt.get("subtitles"):
         line += ", subtitles"
     if opt.get("footage_selection_included"):
@@ -226,17 +308,27 @@ def _deliverable_line(opt: dict) -> str:
 
 
 def whatsapp_message(scope: dict, options: list[dict], tone: str = "warm") -> str:
-    # Only ever verbalize viable, priced options. If fewer than two exist (e.g. the budget
-    # cannot fit any scope), fall back to the decline message instead of inventing numbers.
-    priced = [o for o in options if o.get("viable", True) and o.get("price") is not None]
-    if len(priced) < 2:
-        return decline_message(scope)
-    a, b = priced[0], priced[1]
+    a, b = options[0], options[1]
     opener = {
         "warm": "Thanks for the brief. I broke down the scope first.",
         "firm": "I reviewed the brief and need to protect the scope before quoting.",
         "formal": "Thank you for the brief. I have reviewed the scope and pricing assumptions.",
     }.get(tone, "Thanks for the brief.")
+
+    if a.get("price") is None:
+        # Option A is "no viable scope at this budget" -- do not describe a fabricated
+        # safest option; be direct about the gap and point to what a full-scope quote
+        # would actually cost instead.
+        return (
+            f"{opener} For {scope.get('quantity')} Reels, a few items still affect the quote: final duration, "
+            f"footage selection, subtitles, approvers, and revision limits.\n\n"
+            f"With an {format_idr(scope.get('client_budget'))} budget, I can't fit a viable scope right now -- "
+            f"even a single video's price floor is above that budget. To move forward I'd need either a "
+            f"revised budget or a different scope than what's described.\n\n"
+            f"For reference, keeping all {b['quantity']} Reels with footage selection and {revision_phrase(b['revision_rounds'])} "
+            f"would be {format_idr(b['price'])}, about {b['timeline_days']} working days after all assets are complete.\n\n"
+            f"Let me know if either direction works, or if the budget can move."
+        )
 
     return (
         f"{opener} For {scope.get('quantity')} Reels, a few items still affect the quote: final duration, "
@@ -245,7 +337,7 @@ def whatsapp_message(scope: dict, options: list[dict], tone: str = "warm") -> st
         f"{_deliverable_line(a)} ({format_idr(a['price'])}, about {a['timeline_days']} working days "
         f"after all assets are complete). It includes {revision_phrase(a['revision_rounds'])}.\n\n"
         f"If you want to keep all {b['quantity']} Reels with footage selection and {revision_phrase(b['revision_rounds'])}, "
-        f"the estimate is {format_idr(b['price'])} over about 3 weeks after all assets are complete.\n\n"
+        f"the estimate is {format_idr(b['price'])}, about {b['timeline_days']} working days after all assets are complete.\n\n"
         f"I summarized the options in this link so we can choose the cleanest scope before production starts."
     )
 
@@ -373,10 +465,15 @@ def resolved_seed_scope() -> dict:
     }
 
 
+# Bump when the public snapshot shape changes so old Agreement Sheets can be told apart
+# from ones built under a newer contract.
+AGREEMENT_SNAPSHOT_VERSION = "1.0.0"
+
+
 def agreement_snapshot(opt: dict, project_title: str, client_name: Optional[str] = None, is_demo: bool = False) -> dict:
     """Build the client-facing immutable snapshot from a selected option. No internal cost data."""
     deliverables = [
-        f"{opt.get('quantity')} vertical videos (up to 45 seconds, 9:16)",
+        f"{opt.get('quantity')} vertical videos ({_duration_phrase(opt)}, 9:16)",
         "Subtitles" if opt.get("subtitles", True) else None,
         "Footage selection" if opt.get("footage_selection_included") else None,
         revision_phrase(opt.get("revision_rounds"), consolidated=True),
@@ -436,8 +533,7 @@ def compute_seed_analysis() -> dict:
         cp["target_margin"], scope["client_budget"],
     )
     fields = _seed_fields()
-    resolved = 13  # 11 stated/inferred + duration + footage/approver/revision answered via clarification
-    completeness = pricing.scope_completeness(resolved, len(REQUIRED_FIELDS))
+    completeness = compute_scope_completeness(scope)
     risk = pricing.risk_triggers(scope, est, price)
     conf = pricing.confidence_level(completeness["percent"], has_history=False, unresolved_major=2)
     options = build_options(scope, cost_per_hour, cp["target_margin"], scope["client_budget"])

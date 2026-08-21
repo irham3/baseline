@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Depends
 
 import pricing
 import scope as scope_mod
@@ -11,6 +11,7 @@ import ai_service
 import core
 from core import db, now_utc, iso, clean, resolve_user, resolve_owner
 from models import AnalyzeBody, CostProfileBody, EstimateBody, DealCopyBody, ScopeCheckBody
+from rate_limit import rate_limit
 
 router = APIRouter(prefix="/api")
 
@@ -70,7 +71,7 @@ def build_scope(ov: dict) -> dict:
 
 
 # -------- analyze --------
-@router.post("/analyze")
+@router.post("/analyze", dependencies=[Depends(rate_limit("analyze", 10, 60))])
 async def analyze(body: AnalyzeBody, request: Request):
     if len(body.brief.strip()) < 15:
         raise HTTPException(status_code=422, detail="Brief is too short to analyze (minimum 15 characters).")
@@ -81,11 +82,10 @@ async def analyze(body: AnalyzeBody, request: Request):
         redaction = scope_mod.redact_pii(brief)
         brief = redaction["text"]
 
-    is_seed_demo = (
-        not body.use_ai
-        or brief.strip() in getattr(scope_mod, "SEED_BRIEFS", {scope_mod.SEED_BRIEF})
-        or brief.strip() == scope_mod.SEED_BRIEF
-    )
+    # The seeded demo is keyed by matching the exact seed brief text, not by the
+    # use_ai flag -- use_ai=False means "analyze my real text deterministically",
+    # not "show the canned demo regardless of what I typed".
+    is_seed_demo = brief.strip() in getattr(scope_mod, "SEED_BRIEFS", {scope_mod.SEED_BRIEF})
 
     seed = None
     if is_seed_demo:
@@ -94,7 +94,10 @@ async def analyze(body: AnalyzeBody, request: Request):
             "fields": seed["fields"],
             "ambiguities": [],
             "clarifications": seed["clarifications"],
+            "provenance": "seed",
         }
+    elif not body.use_ai:
+        extraction = ai_service.extract_scope_heuristic(brief)
     else:
         try:
             extraction = await ai_service.extract_scope(brief)
@@ -105,6 +108,7 @@ async def analyze(body: AnalyzeBody, request: Request):
     doc = {
         "analysis_id": analysis_id, "owner_type": owner_type, "owner_id": owner_id,
         "brief": brief, "is_demo": is_seed_demo, "redaction": redaction,
+        "provenance": extraction.get("provenance", "heuristic_fallback"),
         "state": "COMPLETED" if seed else "NEEDS_CLARIFICATION",
         "fields": extraction["fields"],
         "ambiguities": extraction.get("ambiguities", []),
@@ -169,7 +173,8 @@ def _apply_calibration(est: dict, summary: dict) -> tuple[dict, dict]:
 
 def _build_pricing(scope: dict, cph: float, target_margin: float, est: dict) -> dict:
     out = {"price": None, "options": None, "whatsapp": None, "decline": None}
-    buffers = scope_mod.derive_buffers(scope)
+    labor_mid = (est["low"] + est["high"]) / 2 * cph
+    buffers = scope_mod.derive_buffers(scope, labor_mid)
     out["price"] = pricing.price_estimate(est["low"], est["high"], cph, 0.0, buffers,
                                           target_margin, scope.get("client_budget"))
     if scope.get("client_budget"):
@@ -196,10 +201,7 @@ async def estimate(analysis_id: str, body: EstimateBody, request: Request):
             if summary:
                 est, calibration_trace = _apply_calibration(est, summary)
 
-    completeness = pricing.scope_completeness(
-        len(scope_mod.REQUIRED_FIELDS) - scope["unresolved_major_count"] - 2,
-        len(scope_mod.REQUIRED_FIELDS),
-    )
+    completeness = scope_mod.compute_scope_completeness(body.scope_overrides)
     parts = _build_pricing(scope, cph, target_margin, est) if (complete and cph) else \
         {"price": None, "options": None, "whatsapp": None, "decline": None}
     price, options = parts["price"], parts["options"]
@@ -239,6 +241,8 @@ async def deal_copy(analysis_id: str, body: DealCopyBody, request: Request):
     if len(opts) < 2:
         raise HTTPException(status_code=422, detail="At least two options are required for deal copy.")
     a, b = opts[0], opts[1]
+    if a.get("price") is None or b.get("price") is None:
+        raise HTTPException(status_code=422, detail="Both options must have a price to draft deal copy.")
     price_tokens = [scope_mod.format_idr(a["price"]), scope_mod.format_idr(b["price"])]
     params = {
         "quantity": scope.get("quantity"),
@@ -257,7 +261,7 @@ async def deal_copy(analysis_id: str, body: DealCopyBody, request: Request):
 
 
 # -------- Scope Check (P0.5) --------
-@router.post("/analysis/{analysis_id}/scope-check")
+@router.post("/analysis/{analysis_id}/scope-check", dependencies=[Depends(rate_limit("scope-check", 10, 60))])
 async def scope_check(analysis_id: str, body: ScopeCheckBody, request: Request):
     doc = await _owned_analysis(analysis_id, request)
     agreement = await db.scope_agreements.find_one({"analysis_id": analysis_id}, {"_id": 0},
@@ -286,10 +290,10 @@ async def scope_check(analysis_id: str, body: ScopeCheckBody, request: Request):
             tm = body.cost_profile.target_margin
             est_base = pricing.estimate_hours(base_scope)
             est_new = pricing.estimate_hours(new_scope)
-            p_base = pricing.price_estimate(est_base["low"], est_base["high"], cph, 0.0,
-                                            scope_mod.derive_buffers(base_scope), tm)
-            p_new = pricing.price_estimate(est_new["low"], est_new["high"], cph, 0.0,
-                                           scope_mod.derive_buffers(new_scope), tm)
+            base_buffers = scope_mod.derive_buffers(base_scope, (est_base["low"] + est_base["high"]) / 2 * cph)
+            new_buffers = scope_mod.derive_buffers(new_scope, (est_new["low"] + est_new["high"]) / 2 * cph)
+            p_base = pricing.price_estimate(est_base["low"], est_base["high"], cph, 0.0, base_buffers, tm)
+            p_new = pricing.price_estimate(est_new["low"], est_new["high"], cph, 0.0, new_buffers, tm)
             delta_result = {
                 "hours_delta_low": round(est_new["low"] - est_base["low"], 1),
                 "hours_delta_high": round(est_new["high"] - est_base["high"], 1),

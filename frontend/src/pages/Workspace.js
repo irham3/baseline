@@ -121,9 +121,13 @@ export default function Workspace() {
           <div className="mb-2 flex items-center gap-2">
             <History size={17} className="text-amber" />
             <h2 className="font-bold text-ink">Personal Estimation Memory</h2>
-            <Badge tone="amber">1 project, low confidence</Badge>
+            {savedCal && <Badge tone="amber">1 project, low confidence</Badge>}
           </div>
-          <p className="mb-4 text-[13px] text-ink-faint">One past short-form video project. This is a calibration signal, not a machine-learning model.</p>
+          <p className="mb-4 text-[13px] text-ink-faint">
+            {savedCal
+              ? "One past short-form video project. This is a calibration signal, not a machine-learning model."
+              : "Save one past project's estimated vs. actual hours to get a personal calibration signal."}
+          </p>
 
           {savedCal && (
             <div className="mb-4 rounded-xl bg-amber-soft/60 p-3.5" data-testid="ws-cal-trace">

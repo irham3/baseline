@@ -122,6 +122,14 @@ export default function Login() {
     }
   };
 
+  const authErrorMessage = (detail) => {
+    const tooShortPassword = Array.isArray(detail) && detail.some(
+      (e) => e?.loc?.includes("password") && e?.type === "string_too_short"
+    );
+    if (tooShortPassword) return "Password must be at least 6 characters.";
+    return apiErrorMessage(detail);
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -135,7 +143,7 @@ export default function Login() {
       setUser(data);
       navigate("/app");
     } catch (e) {
-      setError(apiErrorMessage(e.response?.data?.detail) || "Sign-in failed.");
+      setError(authErrorMessage(e.response?.data?.detail) || "Sign-in failed.");
     } finally {
       setLoading(false);
     }
@@ -171,6 +179,11 @@ export default function Login() {
                   <span>{googleLoading ? "Signing in with Google..." : "Continue with Google"}</span>
                 </button>
               )}
+              {!GOOGLE_CLIENT_ID && !googleLoading && (
+                <p className="mt-1.5 text-center text-[11px] text-ink-faint" data-testid="google-redirect-notice">
+                  You'll be redirected to a separate page to complete Google sign-in.
+                </p>
+              )}
             </div>
 
             <div className="my-5 flex items-center gap-3 text-xs text-ink-faint">
@@ -200,7 +213,7 @@ export default function Login() {
                     className="input"
                     autoComplete="name"
                     value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    onChange={(e) => { setForm({ ...form, name: e.target.value }); setError(null); }}
                     data-testid="login-name"
                   />
                 </label>
@@ -214,7 +227,7 @@ export default function Login() {
                   className="input"
                   autoComplete="email"
                   value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  onChange={(e) => { setForm({ ...form, email: e.target.value }); setError(null); }}
                   data-testid="login-email"
                 />
               </label>
@@ -229,7 +242,7 @@ export default function Login() {
                   autoComplete={mode === "login" ? "current-password" : "new-password"}
                   placeholder="Minimum 6 characters"
                   value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  onChange={(e) => { setForm({ ...form, password: e.target.value }); setError(null); }}
                   data-testid="login-password"
                 />
               </label>
