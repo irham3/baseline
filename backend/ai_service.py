@@ -150,9 +150,12 @@ def _currency_to_idr(value):
     nums = _numbers_from_text(text)
     if not nums:
         return value
-    if "juta" in text or " jt" in text:
+    # A digit directly before the unit (e.g. "5jt", no space) is as valid as "5 jt" --
+    # requiring the digit (not just a leading space) avoids false positives like the
+    # "rb" inside "terbaik" while still catching the glued-together colloquial form.
+    if re.search(r"\d\s*(?:juta|jt)\b", text):
         return nums[0] * 1_000_000
-    if "ribu" in text or " rb" in text:
+    if re.search(r"\d\s*(?:ribu|rb)\b", text):
         return nums[0] * 1_000
     digits = re.sub(r"\D", "", text)
     if len(digits) >= 5 and ("rp" in text or "." in text):

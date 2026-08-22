@@ -80,6 +80,22 @@ def test_heuristic_extracts_budget_with_possessive_suffix():
     assert f["value"] == 2_500_000
 
 
+def test_heuristic_extracts_budget_with_unit_glued_to_digit():
+    # "5jt" (no space at all between digit and unit) must still resolve to
+    # 5,000,000 -- found live: it was silently parsed as bare "5".
+    result = ai_service.extract_scope_heuristic("Butuh 10 reels, budget 5jt, revisi 2x")
+    f = _field(result, "client_budget")
+    assert f["status"] == "stated"
+    assert f["value"] == 5_000_000
+
+
+def test_heuristic_extracts_budget_in_ribu_glued_to_digit():
+    result = ai_service.extract_scope_heuristic("Butuh 3 video, budget 500rb aja")
+    f = _field(result, "client_budget")
+    assert f["status"] == "stated"
+    assert f["value"] == 500_000
+
+
 def test_heuristic_extracts_revision_count_revisi_word_first():
     # "revisi maksimal 2x" (revisi word before the number) as opposed to "2x revisi".
     result = ai_service.extract_scope_heuristic("5 video, revisi maksimal 2x aja ya")
