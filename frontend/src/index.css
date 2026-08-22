@@ -227,6 +227,15 @@ select {
 .hand { font-family: "Caveat", cursive; }
 .sticker { transform: rotate(var(--r, -6deg)); }
 
+/* Export proposal (master plan P1): #print-proposal is a hidden client-safe
+   summary rendered only for window.print(). Standard print-isolation pattern
+   -- hide everything, then re-reveal just the one element. */
+@media print {
+  body * { visibility: hidden; }
+  #print-proposal, #print-proposal * { visibility: visible; }
+  #print-proposal { position: absolute; top: 0; left: 0; width: 100%; padding: 32px; color: #0f1712; background: #fff; }
+}
+
 /* Continuous ambient motion for the Landing hero backdrop — never settles,
    which is the whole point (shuntapp.xyz / veilpass-stellar reference: a
    background that keeps breathing, not a one-shot entrance). The global

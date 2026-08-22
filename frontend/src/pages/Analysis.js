@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { TriangleAlert, Link2, ExternalLink, Copy, Check, ArrowLeft, Ban, Search, ImageDown } from "lucide-react";
+import { TriangleAlert, Link2, ExternalLink, Copy, Check, ArrowLeft, Ban, Search, ImageDown, FileDown } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { SEO } from "@/components/SEO";
 import { Spinner, Badge, Toast } from "@/components/ui/primitives";
@@ -20,7 +20,7 @@ import WhatsAppPreview, { useClipboard } from "@/components/WhatsAppPreview";
 import CostProfileForm, { DEMO_COST_PROFILE } from "@/components/CostProfileForm";
 import { useAuth } from "@/context/AuthContext";
 import { client, apiErrorMessage, track } from "@/lib/api";
-import { idr, idrRange } from "@/lib/format";
+import { idr, idrRange, revisionPhrase } from "@/lib/format";
 import { generateShareCardBlob } from "@/lib/shareCard";
 
 const THEME_KEY = "baseline-landing-theme";
@@ -82,6 +82,8 @@ export default function Analysis() {
   const [hasCalibration, setHasCalibration] = useState(false);
   const [applyCalibration, setApplyCalibration] = useState(false);
   const [projectTitle, setProjectTitle] = useState("");
+  const [clientName, setClientName] = useState("");
+  const [recentClients, setRecentClients] = useState([]);
   const [agreement, setAgreement] = useState(null);
   const [creating, setCreating] = useState(false);
   const [revoking, setRevoking] = useState(false);
@@ -129,6 +131,7 @@ export default function Analysis() {
   useEffect(() => {
     if (user) {
       client.get("/calibration").then((r) => setHasCalibration(!!r.data?.project_name)).catch(() => {});
+      client.get("/clients").then((r) => setRecentClients(r.data?.clients || [])).catch(() => {});
     }
   }, [user]);
 
@@ -230,6 +233,7 @@ export default function Analysis() {
       const { data } = await client.post(`/analysis/${id}/agreement`, {
         option_id: opt.id,
         project_title: projectTitle || "Video offer - Baseline",
+        client_name: clientName.trim() || undefined,
       });
       setAgreement(data);
       track("agreement_created", { analysis_id: id, option: selected });
@@ -248,6 +252,7 @@ export default function Analysis() {
       await client.post(`/analysis/${id}/agreement/${agreement.token}/revoke`);
       setAgreement(null);
       setProjectTitle("");
+      setClientName("");
       track("agreement_revoked", { analysis_id: id });
       setToast("Link revoked. Clients can no longer respond to it.");
       setTimeout(() => setToast(""), 3000);
@@ -388,7 +393,7 @@ export default function Analysis() {
 
             {user && hasCalibration && analysis.support_level === "calibrated_estimation" && (
               <label className="card flex items-center justify-between p-4" data-testid="apply-calibration">
-                <span className="text-sm font-medium text-ink">Apply one-project calibration</span>
+                <span className="text-sm font-medium text-ink">Apply personal calibration (median)</span>
                 <input type="checkbox" name="apply-calibration" checked={applyCalibration} onChange={(e) => setApplyCalibration(e.target.checked)} className="h-5 w-5 accent-[var(--green)]" />
               </label>
             )}
@@ -479,6 +484,7 @@ export default function Analysis() {
 
               {/* Agreement Sheet creation */}
               {!declineMode && (
+                <>
                 <div className="card p-5" data-testid="create-agreement-panel">
                   <h4 className="flex items-center gap-2 font-bold text-ink"><Link2 size={16} className="text-green" /> Agreement Sheet</h4>
                   {!selectedOption ? (
@@ -528,14 +534,68 @@ export default function Analysis() {
                         onChange={(e) => setProjectTitle(e.target.value)}
                         data-testid="agreement-title"
                       />
+                      <input
+                        name="agreement-client-name"
+                        className="input"
+                        list="recent-clients"
+                        placeholder="Client name (optional)"
+                        value={clientName}
+                        onChange={(e) => setClientName(e.target.value)}
+                        data-testid="agreement-client-name"
+                      />
+                      <datalist id="recent-clients">
+                        {recentClients.map((c) => <option key={c} value={c} />)}
+                      </datalist>
                       <button onClick={createAgreement} disabled={creating} className="btn-primary btn-md w-full" data-testid="create-agreement">
                         {creating ? <><Spinner size={16} /> Creating...</> : <>Create Agreement Sheet</>}
                       </button>
                     </div>
                   )}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  disabled={!selectedOption}
+                  className="btn-ghost btn-sm mt-3 w-full"
+                  data-testid="export-proposal"
+                >
+                  <FileDown size={14} /> Export proposal (PDF)
+                </button>
+                </>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Hidden client-safe proposal, shown only by window.print() -- see
+            #print-proposal in index.css. Never includes cost/margin data. */}
+        {selectedOption && (
+          <div id="print-proposal" className="hidden">
+            <h1 style={{ fontSize: 22, fontWeight: 800 }}>{projectTitle || "Video offer - Baseline"}</h1>
+            <p style={{ marginTop: 4, color: "#435046" }}>Prepared with Baseline — a pre-deal decision, not a vague quote.</p>
+            <table style={{ marginTop: 20, width: "100%", borderCollapse: "collapse" }}>
+              <tbody>
+                <tr><td style={{ padding: "6px 0", fontWeight: 700 }}>Price</td><td>{idr(selectedOption.price)}</td></tr>
+                <tr><td style={{ padding: "6px 0", fontWeight: 700 }}>Quantity</td><td>{selectedOption.quantity} videos</td></tr>
+                <tr><td style={{ padding: "6px 0", fontWeight: 700 }}>Timeline</td><td>{selectedOption.timeline_days} working days after assets are complete</td></tr>
+                <tr><td style={{ padding: "6px 0", fontWeight: 700 }}>Revisions</td><td>{revisionPhrase(selectedOption.revision_rounds, true)}</td></tr>
+                {overrides.acceptance_criteria && (
+                  <tr><td style={{ padding: "6px 0", fontWeight: 700 }}>Definition of done</td><td>{overrides.acceptance_criteria}</td></tr>
+                )}
+                {overrides.change_boundary && (
+                  <tr><td style={{ padding: "6px 0", fontWeight: 700 }}>Change boundary</td><td>{overrides.change_boundary}</td></tr>
+                )}
+              </tbody>
+            </table>
+            {selectedOption.exclusions?.length > 0 && (
+              <>
+                <p style={{ marginTop: 20, fontWeight: 700 }}>Out of scope</p>
+                <ul>{selectedOption.exclusions.map((e, i) => <li key={i}>{e}</li>)}</ul>
+              </>
+            )}
+            <p style={{ marginTop: 24, fontSize: 11, color: "#718073" }}>
+              This proposal documents scope only — not a legal contract. Rate, cost, and margin are never shared.
+            </p>
           </div>
         )}
 
