@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { TriangleAlert, Link2, ExternalLink, Copy, Check, ArrowLeft, Ban, Search } from "lucide-react";
+import { TriangleAlert, Link2, ExternalLink, Copy, Check, ArrowLeft, Ban, Search, ImageDown } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { SEO } from "@/components/SEO";
 import { Spinner, Badge, Toast } from "@/components/ui/primitives";
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { buttonVariants } from "@/components/ui/button";
 import BriefMap from "@/components/BriefMap";
-import BriefCritique from "@/components/BriefCritique";
+import BriefCritique, { READINESS_LABEL } from "@/components/BriefCritique";
 import ClarificationGate from "@/components/ClarificationGate";
 import EstimateResult from "@/components/EstimateResult";
 import RiskTriggers from "@/components/RiskTriggers";
@@ -20,7 +20,8 @@ import WhatsAppPreview, { useClipboard } from "@/components/WhatsAppPreview";
 import CostProfileForm, { DEMO_COST_PROFILE } from "@/components/CostProfileForm";
 import { useAuth } from "@/context/AuthContext";
 import { client, apiErrorMessage, track } from "@/lib/api";
-import { idr } from "@/lib/format";
+import { idr, idrRange } from "@/lib/format";
+import { generateShareCardBlob } from "@/lib/shareCard";
 
 const THEME_KEY = "baseline-landing-theme";
 
@@ -93,6 +94,7 @@ export default function Analysis() {
   const [scopeCheckError, setScopeCheckError] = useState(null);
   const [toast, setToast] = useState("");
   const [changingProfession, setChangingProfession] = useState(false);
+  const [sharingImage, setSharingImage] = useState(false);
   const [dark, setDark] = useState(() => {
     try {
       return localStorage.getItem(THEME_KEY) !== "light";
@@ -153,6 +155,32 @@ export default function Analysis() {
       setRecalc(false);
     }
   }, [id, costProfile, overrides, applyCalibration, selected]);
+
+  const shareResultImage = async () => {
+    setSharingImage(true);
+    try {
+      const readinessState = result?.readiness_state ?? analysis.readiness_state;
+      const issues = result?.deal_issues ?? analysis.deal_issues ?? [];
+      const price = result?.price ?? analysis.price;
+      const blob = await generateShareCardBlob({
+        readinessLabel: READINESS_LABEL[readinessState] || "Pre-deal critique",
+        issueCount: issues.length,
+        priceFloorText: price ? idrRange(price.price_floor_low, price.price_floor_high) : null,
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "baseline-result.png";
+      a.click();
+      URL.revokeObjectURL(url);
+      track("share_image_downloaded", { analysis_id: id });
+    } catch {
+      setToast("Could not generate the share image.");
+      setTimeout(() => setToast(""), 3000);
+    } finally {
+      setSharingImage(false);
+    }
+  };
 
   const changeProfession = async (profession) => {
     if (!analysis || profession === analysis.profession) return;
@@ -331,6 +359,15 @@ export default function Analysis() {
             readinessState={result?.readiness_state ?? analysis.readiness_state}
             issues={result?.deal_issues ?? analysis.deal_issues}
           />
+          <button
+            type="button"
+            onClick={shareResultImage}
+            disabled={sharingImage}
+            className="btn-ghost btn-sm mt-3"
+            data-testid="share-result-image"
+          >
+            {sharingImage ? <><Spinner size={14} /> Generating...</> : <><ImageDown size={14} /> Download result image</>}
+          </button>
         </div>
 
         {/* Evidence detail — secondary, not the magic-moment screen */}

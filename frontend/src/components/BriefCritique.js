@@ -24,6 +24,10 @@ const READINESS = {
   },
 };
 
+export const READINESS_LABEL = Object.fromEntries(
+  Object.entries(READINESS).map(([state, v]) => [state, v.label])
+);
+
 const CATEGORY_LABEL = {
   revision_boundary: "Revision boundary",
   deliverable_clarity: "Deliverable clarity",
