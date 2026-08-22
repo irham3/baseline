@@ -4,11 +4,11 @@ import { Info } from "lucide-react";
 
 export function Badge({ tone = "neutral", children, className, ...rest }) {
   const tones = {
-    green: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
-    amber: "bg-amber-500/15 text-amber-400 border border-amber-500/30",
-    danger: "bg-rose-500/15 text-rose-400 border border-rose-500/30",
-    neutral: "bg-white/[0.06] text-zinc-300 border border-white/10",
-    ink: "bg-white/10 text-white border border-white/15",
+    green: "bg-green-soft text-green-strong border border-green/30",
+    amber: "bg-amber-soft text-amber border border-amber/30",
+    danger: "bg-danger-soft text-danger border border-danger/30",
+    neutral: "bg-raised text-ink-soft border border-line/60",
+    ink: "bg-raised text-ink border border-line/60",
   };
   return (
     <span className={clsx("chip", tones[tone], className)} {...rest}>

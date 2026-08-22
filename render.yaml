@@ -1,0 +1,32 @@
+# Render Blueprint for the Baseline backend (FastAPI). Deploy via
+# https://dashboard.render.com/blueprints -> New Blueprint Instance,
+# pointing at this repo/branch (rifqi).
+#
+# Secrets (JWT_SECRET, MONGO_URL, GOOGLE_CLIENT_ID) are intentionally NOT
+# listed here with values -- Render will prompt for them in the dashboard
+# ("sync: false" below), so nothing sensitive ever needs to touch git.
+# See DEPLOY.md for what to paste into each one.
+
+services:
+  - type: web
+    name: baseline-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DB_NAME
+        value: baseline_prod
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: JWT_SECRET
+        sync: false
+      - key: MONGO_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false

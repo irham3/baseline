@@ -1,10 +1,17 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { TriangleAlert, Link2, ExternalLink, Copy, Check, ArrowLeft } from "lucide-react";
+import { motion } from "framer-motion";
+import { TriangleAlert, Link2, ExternalLink, Copy, Check, ArrowLeft, Ban, Search, ImageDown, FileDown } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { SEO } from "@/components/SEO";
 import { Spinner, Badge, Toast } from "@/components/ui/primitives";
+import {
+  AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader,
+  AlertDialogFooter, AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
+import { buttonVariants } from "@/components/ui/button";
 import BriefMap from "@/components/BriefMap";
+import BriefCritique, { READINESS_LABEL } from "@/components/BriefCritique";
 import ClarificationGate from "@/components/ClarificationGate";
 import EstimateResult from "@/components/EstimateResult";
 import RiskTriggers from "@/components/RiskTriggers";
@@ -13,6 +20,10 @@ import WhatsAppPreview, { useClipboard } from "@/components/WhatsAppPreview";
 import CostProfileForm, { DEMO_COST_PROFILE } from "@/components/CostProfileForm";
 import { useAuth } from "@/context/AuthContext";
 import { client, apiErrorMessage, track } from "@/lib/api";
+import { idr, idrRange, revisionPhrase } from "@/lib/format";
+import { generateShareCardBlob } from "@/lib/shareCard";
+
+const THEME_KEY = "baseline-landing-theme";
 
 function toNum(v) {
   const n = Number(v);
@@ -41,6 +52,8 @@ function overridesFromFields(fields) {
     scripting: typeof scripting?.value === "boolean" ? scripting.value : false,
     motion_level: get("motion_level")?.value || "basic",
     rush: typeof rush?.value === "boolean" ? rush.value : false,
+    acceptance_criteria: get("acceptance_criteria")?.value ?? null,
+    change_boundary: get("change_boundary")?.value ?? null,
   };
 }
 
@@ -49,6 +62,7 @@ export default function Analysis() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { state: copyState, copy } = useClipboard();
+  const { state: scopeCopyState, copy: copyScopeReply } = useClipboard();
 
   const [analysis, setAnalysis] = useState(null);
   const [loadErr, setLoadErr] = useState(null);
@@ -68,16 +82,45 @@ export default function Analysis() {
   const [hasCalibration, setHasCalibration] = useState(false);
   const [applyCalibration, setApplyCalibration] = useState(false);
   const [projectTitle, setProjectTitle] = useState("");
+  const [clientName, setClientName] = useState("");
+  const [recentClients, setRecentClients] = useState([]);
   const [agreement, setAgreement] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+  const [polishedDrafts, setPolishedDrafts] = useState(null);
+  const [polishing, setPolishing] = useState(false);
+  const [polishError, setPolishError] = useState(null);
+  const [scopeCheckText, setScopeCheckText] = useState("");
+  const [scopeChecking, setScopeChecking] = useState(false);
+  const [scopeCheckResult, setScopeCheckResult] = useState(null);
+  const [scopeCheckError, setScopeCheckError] = useState(null);
   const [toast, setToast] = useState("");
+  const [changingProfession, setChangingProfession] = useState(false);
+  const [sharingImage, setSharingImage] = useState(false);
+  const [dark, setDark] = useState(() => {
+    try {
+      return localStorage.getItem(THEME_KEY) !== "light";
+    } catch {
+      return true;
+    }
+  });
+  const toggleDark = () => {
+    setDark((d) => {
+      const next = !d;
+      try {
+        localStorage.setItem(THEME_KEY, next ? "dark" : "light");
+      } catch { /* ignore storage failures */ }
+      return next;
+    });
+  };
 
   useEffect(() => {
     client
       .get(`/analysis/${id}`)
       .then((r) => {
         setAnalysis(r.data);
-        setOverrides(r.data.scope_used || overridesFromFields(r.data.fields || []));
+        const base = r.data.scope_used || overridesFromFields(r.data.fields || []);
+        setOverrides({ ...base, ...(r.data.deal_terms || {}) });
         if (r.data.estimate) {
           setResult(r.data);
         }
@@ -88,6 +131,7 @@ export default function Analysis() {
   useEffect(() => {
     if (user) {
       client.get("/calibration").then((r) => setHasCalibration(!!r.data?.project_name)).catch(() => {});
+      client.get("/clients").then((r) => setRecentClients(r.data?.clients || [])).catch(() => {});
     }
   }, [user]);
 
@@ -115,10 +159,70 @@ export default function Analysis() {
     }
   }, [id, costProfile, overrides, applyCalibration, selected]);
 
+  const shareResultImage = async () => {
+    setSharingImage(true);
+    try {
+      const readinessState = result?.readiness_state ?? analysis.readiness_state;
+      const issues = result?.deal_issues ?? analysis.deal_issues ?? [];
+      const price = result?.price ?? analysis.price;
+      const blob = await generateShareCardBlob({
+        readinessLabel: READINESS_LABEL[readinessState] || "Pre-deal critique",
+        issueCount: issues.length,
+        priceFloorText: price ? idrRange(price.price_floor_low, price.price_floor_high) : null,
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "baseline-result.png";
+      a.click();
+      URL.revokeObjectURL(url);
+      track("share_image_downloaded", { analysis_id: id });
+    } catch {
+      setToast("Could not generate the share image.");
+      setTimeout(() => setToast(""), 3000);
+    } finally {
+      setSharingImage(false);
+    }
+  };
+
+  const changeProfession = async (profession) => {
+    if (!analysis || profession === analysis.profession) return;
+    setChangingProfession(true);
+    try {
+      const { data } = await client.post(`/analysis/${id}/profession`, { profession });
+      setAnalysis((a) => ({ ...a, ...data }));
+      track("profession_overridden", { analysis_id: id, profession });
+    } catch (e) {
+      setToast(apiErrorMessage(e.response?.data?.detail) || "Could not update project type.");
+      setTimeout(() => setToast(""), 3000);
+    } finally {
+      setChangingProfession(false);
+    }
+  };
+
   const selectOption = (opt) => {
     setDeclineMode(false);
     setSelected(opt.id);
+    setPolishedDrafts(null); // stale once the underlying option/numbers change
     track("option_selected", { analysis_id: id, option: opt.id });
+  };
+
+  const polishWithAi = async () => {
+    if (!result?.options || result.options.length < 2) return;
+    setPolishing(true);
+    setPolishError(null);
+    try {
+      const { data } = await client.post(`/analysis/${id}/deal-copy`, {
+        scope_overrides: overrides,
+        options: result.options,
+      });
+      setPolishedDrafts(data.whatsapp);
+      track("whatsapp_polished", { analysis_id: id });
+    } catch (e) {
+      setPolishError(apiErrorMessage(e.response?.data?.detail) || "Could not polish with AI. The template draft below is still fine to send.");
+    } finally {
+      setPolishing(false);
+    }
   };
 
   const createAgreement = async () => {
@@ -127,8 +231,9 @@ export default function Analysis() {
     setCreating(true);
     try {
       const { data } = await client.post(`/analysis/${id}/agreement`, {
-        option: opt,
-        project_title: projectTitle || "Video offer - Baseline Work",
+        option_id: opt.id,
+        project_title: projectTitle || "Video offer - Baseline",
+        client_name: clientName.trim() || undefined,
       });
       setAgreement(data);
       track("agreement_created", { analysis_id: id, option: selected });
@@ -140,12 +245,46 @@ export default function Analysis() {
     }
   };
 
+  const revokeAgreement = async () => {
+    if (!agreement) return;
+    setRevoking(true);
+    try {
+      await client.post(`/analysis/${id}/agreement/${agreement.token}/revoke`);
+      setAgreement(null);
+      setProjectTitle("");
+      setClientName("");
+      track("agreement_revoked", { analysis_id: id });
+      setToast("Link revoked. Clients can no longer respond to it.");
+      setTimeout(() => setToast(""), 3000);
+    } catch (e) {
+      setToast(apiErrorMessage(e.response?.data?.detail) || "Failed to revoke the link.");
+      setTimeout(() => setToast(""), 3000);
+    } finally {
+      setRevoking(false);
+    }
+  };
+
+  const runScopeCheck = async () => {
+    if (!scopeCheckText.trim()) return;
+    setScopeChecking(true);
+    setScopeCheckError(null);
+    try {
+      const { data } = await client.post(`/analysis/${id}/scope-check`, { new_request: scopeCheckText });
+      setScopeCheckResult(data);
+      track("scope_check_run", { analysis_id: id });
+    } catch (e) {
+      setScopeCheckError(apiErrorMessage(e.response?.data?.detail) || "Scope Check failed. Please try again.");
+    } finally {
+      setScopeChecking(false);
+    }
+  };
+
   const agreementUrl = agreement ? `${window.location.origin}/s/${agreement.token}` : "";
   const selectedOption = result?.options?.find((o) => o.id === selected);
 
   if (loadErr) {
     return (
-      <Shell>
+      <Shell dark={dark} onToggleDark={toggleDark}>
         <div className="wrap-narrow py-16 text-center">
           <TriangleAlert className="mx-auto text-amber" size={30} />
           <p className="mt-3 font-semibold text-ink">{loadErr}</p>
@@ -157,27 +296,57 @@ export default function Analysis() {
 
   if (!analysis || !overrides) {
     return (
-      <Shell>
+      <Shell dark={dark} onToggleDark={toggleDark}>
         <div className="wrap flex min-h-[60vh] items-center justify-center"><Spinner size={26} /></div>
       </Shell>
     );
   }
 
   return (
-    <Shell>
+    <Shell dark={dark} onToggleDark={toggleDark}>
       <SEO
-        title="Brief Map & Scope Analysis"
-        description="Detailed scope map, hidden parameters, price floor calculation, and deal options for the analyzed client brief."
+        title="Pre-deal Critique & Scope Analysis"
+        description="Evidence-backed brief critique, readiness state, hidden parameters, price floor calculation, and deal options for the analyzed client brief."
         canonical={`/analysis/${id}`}
         noIndex={true}
       />
-      <div className="wrap py-8">
+      <motion.div
+        className="wrap py-8"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      >
         <button onClick={() => navigate("/analyze")} className="btn-ghost btn-sm mb-3" data-testid="analysis-back">
           <ArrowLeft size={14} /> New analysis
         </button>
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-extrabold text-ink">Brief Map</h1>
-          {analysis.is_demo && <Badge tone="amber">Demo</Badge>}
+          <h1 className="text-2xl font-extrabold text-ink">Pre-deal Critique</h1>
+          {analysis.is_demo && <Badge tone="amber" data-testid="provenance-demo">Demo data</Badge>}
+          {!analysis.is_demo && analysis.provenance === "ai" && (
+            <Badge tone="green" data-testid="provenance-ai">AI extraction</Badge>
+          )}
+          {!analysis.is_demo && analysis.provenance === "heuristic_fallback" && (
+            <Badge tone="neutral" data-testid="provenance-fallback">Deterministic fallback (no AI)</Badge>
+          )}
+        </div>
+
+        {/* Profession classification -- a keyword guess, not a trained classifier;
+            wrong for enough briefs that it needs to be user-correctable. */}
+        <div className="mt-2 flex flex-wrap items-center gap-2" data-testid="profession-selector">
+          <span className="text-[12px] font-medium text-ink-faint">Project type:</span>
+          <select
+            className="rounded-full border border-line/60 bg-raised px-2.5 py-1 text-[12px] font-medium text-ink-soft outline-none transition-colors focus:border-green"
+            value={analysis.profession || "general"}
+            onChange={(e) => changeProfession(e.target.value)}
+            disabled={changingProfession}
+            data-testid="profession-select"
+          >
+            <option value="short_form_video">Short-form video (calibrated pricing)</option>
+            <option value="general">Other / general (critique only)</option>
+          </select>
+          {analysis.profession_overridden && (
+            <span className="text-[11px] text-ink-faint">(corrected by you)</span>
+          )}
         </div>
 
         {/* Redacted brief */}
@@ -189,20 +358,42 @@ export default function Analysis() {
           )}
         </div>
 
-        {/* Brief map */}
-        <div className="mt-5"><BriefMap fields={analysis.fields} /></div>
+        {/* Prioritized Brief Critique — the primary result, before any field map or price */}
+        <div className="mt-5">
+          <BriefCritique
+            readinessState={result?.readiness_state ?? analysis.readiness_state}
+            issues={result?.deal_issues ?? analysis.deal_issues}
+          />
+          <button
+            type="button"
+            onClick={shareResultImage}
+            disabled={sharingImage}
+            className="btn-ghost btn-sm mt-3"
+            data-testid="share-result-image"
+          >
+            {sharingImage ? <><Spinner size={14} /> Generating...</> : <><ImageDown size={14} /> Download result image</>}
+          </button>
+        </div>
+
+        {/* Evidence detail — secondary, not the magic-moment screen */}
+        <div className="mt-6">
+          <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-ink-faint">Evidence detail</h3>
+          <BriefMap fields={analysis.fields} />
+        </div>
 
         {/* Two-column: clarification + result */}
         <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="space-y-4">
-            <div className="card p-5">
-              <h3 className="mb-3 font-bold text-ink">Cost Profile</h3>
-              <CostProfileForm value={costProfile} onChange={(cp) => setCostProfile(cp)} />
-            </div>
+            {analysis.support_level === "calibrated_estimation" && (
+              <div className="card p-5">
+                <h3 className="mb-3 font-bold text-ink">Cost Profile</h3>
+                <CostProfileForm value={costProfile} onChange={(cp) => setCostProfile(cp)} />
+              </div>
+            )}
 
-            {user && hasCalibration && (
+            {user && hasCalibration && analysis.support_level === "calibrated_estimation" && (
               <label className="card flex items-center justify-between p-4" data-testid="apply-calibration">
-                <span className="text-sm font-medium text-ink">Apply one-project calibration</span>
+                <span className="text-sm font-medium text-ink">Apply personal calibration (median)</span>
                 <input type="checkbox" name="apply-calibration" checked={applyCalibration} onChange={(e) => setApplyCalibration(e.target.checked)} className="h-5 w-5 accent-[var(--green)]" />
               </label>
             )}
@@ -213,11 +404,20 @@ export default function Analysis() {
               questions={analysis.clarifications}
               onRecalc={runEstimate}
               recalculating={recalc}
+              hideRecalc={analysis.support_level !== "calibrated_estimation"}
             />
           </div>
 
           <div className="space-y-4">
-            {!result ? (
+            {analysis.support_level !== "calibrated_estimation" ? (
+              <div className="card flex min-h-[240px] flex-col items-center justify-center gap-3 p-8 text-center" data-testid="estimation-unsupported">
+                <p className="font-semibold text-ink">Deep estimation isn't supported for this project type yet.</p>
+                <p className="text-[13px] text-ink-soft">
+                  Baseline doesn't have a calibrated hour/price template for it, so it won't invent one. Answer the questions above,
+                  then use <span className="font-semibold text-ink">Copy questions</span> to send them, or copy the evidence above into your own reply.
+                </p>
+              </div>
+            ) : !result ? (
               <div className="card flex min-h-[240px] flex-col items-center justify-center p-8 text-center" data-testid="estimate-empty">
                 <p className="text-ink-soft">Answer the scope fields, then press <span className="font-semibold text-ink">Calculate estimate</span> to see the hour range and price floor.</p>
               </div>
@@ -255,15 +455,36 @@ export default function Analysis() {
             </div>
 
             <div className="mt-5 grid gap-6 lg:grid-cols-2">
-              <WhatsAppPreview
-                drafts={result.whatsapp}
-                declineMode={declineMode}
-                declineMessage={result.decline_message}
-                onCopy={() => track("whatsapp_copied", { analysis_id: id, decline: declineMode })}
-              />
+              <div>
+                {!declineMode && (
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <button onClick={polishWithAi} disabled={polishing} className="btn-secondary btn-sm" data-testid="polish-with-ai">
+                      {polishing ? <><Spinner size={13} /> Polishing...</> : <>✨ Polish with AI</>}
+                    </button>
+                    {polishedDrafts && (
+                      <>
+                        <Badge tone="green">AI-polished</Badge>
+                        <button onClick={() => setPolishedDrafts(null)} className="text-[12px] font-semibold text-ink-faint hover:text-ink">Use template instead</button>
+                      </>
+                    )}
+                    {polishError && (
+                      <span className="text-[12px] font-semibold text-danger" data-testid="polish-error">
+                        {polishError} <button onClick={polishWithAi} className="underline underline-offset-2">Retry</button>
+                      </span>
+                    )}
+                  </div>
+                )}
+                <WhatsAppPreview
+                  drafts={polishedDrafts || result.whatsapp}
+                  declineMode={declineMode}
+                  declineMessage={result.decline_message}
+                  onCopy={() => track("whatsapp_copied", { analysis_id: id, decline: declineMode })}
+                />
+              </div>
 
               {/* Agreement Sheet creation */}
               {!declineMode && (
+                <>
                 <div className="card p-5" data-testid="create-agreement-panel">
                   <h4 className="flex items-center gap-2 font-bold text-ink"><Link2 size={16} className="text-green" /> Agreement Sheet</h4>
                   {!selectedOption ? (
@@ -281,6 +502,25 @@ export default function Analysis() {
                         <a href={`/s/${agreement.token}`} target="_blank" rel="noreferrer" className="btn-primary btn-sm" data-testid="open-agreement">
                           Open <ExternalLink size={14} />
                         </a>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <button className="btn-ghost btn-sm text-danger" data-testid="revoke-agreement">
+                              <Ban size={14} /> Revoke
+                            </button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent data-testid="revoke-confirm">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Revoke this link?</AlertDialogTitle>
+                              <AlertDialogDescription>The client won't be able to respond anymore.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={revokeAgreement} disabled={revoking} className={buttonVariants({ variant: "destructive" })}>
+                                {revoking ? <Spinner size={13} /> : "Confirm"}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </div>
                   ) : (
@@ -294,17 +534,132 @@ export default function Analysis() {
                         onChange={(e) => setProjectTitle(e.target.value)}
                         data-testid="agreement-title"
                       />
+                      <input
+                        name="agreement-client-name"
+                        className="input"
+                        list="recent-clients"
+                        placeholder="Client name (optional)"
+                        value={clientName}
+                        onChange={(e) => setClientName(e.target.value)}
+                        data-testid="agreement-client-name"
+                      />
+                      <datalist id="recent-clients">
+                        {recentClients.map((c) => <option key={c} value={c} />)}
+                      </datalist>
                       <button onClick={createAgreement} disabled={creating} className="btn-primary btn-md w-full" data-testid="create-agreement">
                         {creating ? <><Spinner size={16} /> Creating...</> : <>Create Agreement Sheet</>}
                       </button>
                     </div>
                   )}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  disabled={!selectedOption}
+                  className="btn-ghost btn-sm mt-3 w-full"
+                  data-testid="export-proposal"
+                >
+                  <FileDown size={14} /> Export proposal (PDF)
+                </button>
+                </>
               )}
             </div>
           </div>
         )}
-      </div>
+
+        {/* Hidden client-safe proposal, shown only by window.print() -- see
+            #print-proposal in index.css. Never includes cost/margin data. */}
+        {selectedOption && (
+          <div id="print-proposal" className="hidden">
+            <h1 style={{ fontSize: 22, fontWeight: 800 }}>{projectTitle || "Video offer - Baseline"}</h1>
+            <p style={{ marginTop: 4, color: "#435046" }}>Prepared with Baseline — a pre-deal decision, not a vague quote.</p>
+            <table style={{ marginTop: 20, width: "100%", borderCollapse: "collapse" }}>
+              <tbody>
+                <tr><td style={{ padding: "6px 0", fontWeight: 700 }}>Price</td><td>{idr(selectedOption.price)}</td></tr>
+                <tr><td style={{ padding: "6px 0", fontWeight: 700 }}>Quantity</td><td>{selectedOption.quantity} videos</td></tr>
+                <tr><td style={{ padding: "6px 0", fontWeight: 700 }}>Timeline</td><td>{selectedOption.timeline_days} working days after assets are complete</td></tr>
+                <tr><td style={{ padding: "6px 0", fontWeight: 700 }}>Revisions</td><td>{revisionPhrase(selectedOption.revision_rounds, true)}</td></tr>
+                {overrides.acceptance_criteria && (
+                  <tr><td style={{ padding: "6px 0", fontWeight: 700 }}>Definition of done</td><td>{overrides.acceptance_criteria}</td></tr>
+                )}
+                {overrides.change_boundary && (
+                  <tr><td style={{ padding: "6px 0", fontWeight: 700 }}>Change boundary</td><td>{overrides.change_boundary}</td></tr>
+                )}
+              </tbody>
+            </table>
+            {selectedOption.exclusions?.length > 0 && (
+              <>
+                <p style={{ marginTop: 20, fontWeight: 700 }}>Out of scope</p>
+                <ul>{selectedOption.exclusions.map((e, i) => <li key={i}>{e}</li>)}</ul>
+              </>
+            )}
+            <p style={{ marginTop: 24, fontSize: 11, color: "#718073" }}>
+              This proposal documents scope only — not a legal contract. Rate, cost, and margin are never shared.
+            </p>
+          </div>
+        )}
+
+        {agreement && (
+          <div className="mt-8 card p-5" data-testid="scope-check-panel">
+            <h2 className="flex items-center gap-2 text-xl font-extrabold text-ink"><Search size={18} className="text-green" /> Scope Check</h2>
+            <p className="mt-1 text-ink-soft">Client asking for something extra after sending the Agreement Sheet? Paste the request to check whether it's already included, a revision, or new scope.</p>
+            <textarea
+              name="scope-check-input"
+              className="textarea mt-4 min-h-[80px]"
+              placeholder={'e.g. "Bisa tambahin 2 video lagi ga? sama warnanya diganti jadi lebih cerah"'}
+              value={scopeCheckText}
+              onChange={(e) => setScopeCheckText(e.target.value)}
+              disabled={scopeChecking}
+              data-testid="scope-check-textarea"
+            />
+            <button onClick={runScopeCheck} disabled={scopeChecking || !scopeCheckText.trim()} className="btn-primary btn-md mt-3" data-testid="scope-check-run">
+              {scopeChecking ? <><Spinner size={16} /> Checking...</> : "Check scope"}
+            </button>
+
+            {scopeCheckError && (
+              <div className="mt-4 flex items-start gap-2 rounded-xl border border-danger/30 bg-danger/5 p-3.5 text-[13px] text-danger" data-testid="scope-check-error">
+                <TriangleAlert size={16} className="mt-0.5 shrink-0" />
+                <div>
+                  {scopeCheckError}
+                  <button onClick={runScopeCheck} className="ml-2 font-bold underline underline-offset-2">Retry</button>
+                </div>
+              </div>
+            )}
+
+            {scopeCheckResult && (
+              <div className="mt-4 space-y-3" data-testid="scope-check-result">
+                <Badge tone={
+                  scopeCheckResult.classification === "included" ? "green" :
+                  scopeCheckResult.classification === "revision" ? "amber" :
+                  scopeCheckResult.classification === "new_scope" ? "danger" : "neutral"
+                }>
+                  {{
+                    included: "Included in scope",
+                    revision: "Covered as a revision",
+                    new_scope: "New scope — needs a fee adjustment",
+                    unclear: "Unclear — needs clarification",
+                  }[scopeCheckResult.classification] || scopeCheckResult.classification}
+                </Badge>
+                <p className="text-[13px] text-ink-soft">{scopeCheckResult.explanation}</p>
+                {scopeCheckResult.delta_result && (
+                  <p className="text-[13px] font-semibold text-ink">
+                    Adds about {scopeCheckResult.delta_result.price_delta_low != null ? idr(scopeCheckResult.delta_result.price_delta_low) : "-"} to {scopeCheckResult.delta_result.price_delta_high != null ? idr(scopeCheckResult.delta_result.price_delta_high) : "-"}.
+                  </p>
+                )}
+                <div className="rounded-xl bg-raised p-3.5">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="text-[12px] font-bold text-ink-faint">Suggested reply</span>
+                    <button onClick={() => copyScopeReply(scopeCheckResult.whatsapp)} className="btn-secondary btn-sm">
+                      {scopeCopyState === "ok" ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy</>}
+                    </button>
+                  </div>
+                  <p className="whitespace-pre-wrap text-[13px] text-ink-soft">{scopeCheckResult.whatsapp}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </motion.div>
       <Toast show={!!toast}>{toast}</Toast>
     </Shell>
   );

@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 
 const BASE_URL = "https://baselinework.app";
-const DEFAULT_TITLE = "Baseline Work — Pre-deal Scope Checks & Price Floor for Freelancers";
-const DEFAULT_DESCRIPTION = "Pre-deal scope check and pricing floor calculator for short-form video freelancers. Paste a client brief, find hidden work, compute unassailable price floors, and send clean pre-deal agreements.";
+const DEFAULT_TITLE = "Baseline — AI pre-deal decision system for Indonesian freelancers";
+const DEFAULT_DESCRIPTION = "AI pre-deal critique and pricing workflow for Indonesian freelancers before they say yes. Baseline surfaces ambiguous scope with evidence, explains why it matters, and — on calibrated work templates — computes transparent effort and price-floor ranges.";
 const DEFAULT_IMAGE = `${BASE_URL}/assets/baseline-logo-512.png`;
 
 function setMetaTag(selector, attribute, value) {
@@ -44,7 +44,7 @@ export function SEO({
 }) {
   useEffect(() => {
     // 1. Page Title
-    const formattedTitle = title ? `${title} | Baseline Work` : DEFAULT_TITLE;
+    const formattedTitle = title ? `${title} | Baseline` : DEFAULT_TITLE;
     document.title = formattedTitle;
 
     // 2. Standard Meta Tags
@@ -57,14 +57,14 @@ export function SEO({
 
     // 4. OpenGraph Tags (Facebook, WhatsApp, LinkedIn, Telegram, Discord)
     const fullCanonical = canonical.startsWith("http") ? canonical : `${BASE_URL}${canonical}`;
-    setMetaTag('meta[property="og:site_name"]', "content", "Baseline Work");
+    setMetaTag('meta[property="og:site_name"]', "content", "Baseline");
     setMetaTag('meta[property="og:title"]', "content", formattedTitle);
     setMetaTag('meta[property="og:description"]', "content", description);
     setMetaTag('meta[property="og:url"]', "content", fullCanonical);
     setMetaTag('meta[property="og:type"]', "content", ogType);
     setMetaTag('meta[property="og:image"]', "content", ogImage);
     setMetaTag('meta[property="og:image:secure_url"]', "content", ogImage);
-    setMetaTag('meta[property="og:image:alt"]', "content", "Baseline Work Logo & Dashboard");
+    setMetaTag('meta[property="og:image:alt"]', "content", "Baseline Logo & Dashboard");
 
     // 5. Twitter / X / Slack / Discord Cards
     setMetaTag('meta[name="twitter:card"]', "content", "summary_large_image");
@@ -73,7 +73,7 @@ export function SEO({
     setMetaTag('meta[name="twitter:title"]', "content", formattedTitle);
     setMetaTag('meta[name="twitter:description"]', "content", description);
     setMetaTag('meta[name="twitter:image"]', "content", ogImage);
-    setMetaTag('meta[name="twitter:image:alt"]', "content", "Baseline Work Logo & Dashboard");
+    setMetaTag('meta[name="twitter:image:alt"]', "content", "Baseline Logo & Dashboard");
 
     // 6. Optional Dynamic JSON-LD script
     let scriptEl = null;

@@ -15,3 +15,7 @@ __pycache__/
 .venv/
 backend/.venv/
 .vscode/
+
+# Real pilot testers' names/contacts/feedback -- never belongs in a public
+# contest submission repo without their explicit consent to publish.
+/pilot-notes/

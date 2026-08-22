@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, BriefcaseBusiness, LogOut, Menu, UserRound, X } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion, useScroll, useSpring } from "framer-motion";
+import { BriefcaseBusiness, LogOut, Menu, Moon, Sun, UserRound, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 const PRIMARY_NAV = [];
@@ -13,16 +13,16 @@ function isActive(pathname, target) {
 
 export function Logo({ className = "", dark = false }) {
   return (
-    <Link to="/" className={`group inline-flex items-center gap-2.5 ${className}`} data-testid="brand-logo" aria-label="Baseline Work home">
+    <Link to="/" className={`group inline-flex items-center gap-2.5 ${className}`} data-testid="brand-logo" aria-label="Baseline home">
       <img
         src="/assets/baseline-logo-192.png"
-        alt="Baseline Work logo"
+        alt="Baseline logo"
         className="h-8 w-8 shrink-0 rounded-lg shadow-[0_8px_18px_-12px_rgba(16,185,129,0.7)]"
         width="32"
         height="32"
       />
       <span className={`text-[16px] font-extrabold tracking-tight ${dark ? "text-white" : "text-ink"}`}>
-        Baseline <span className="text-emerald-500">Work</span>
+        Baseline
       </span>
     </Link>
   );
@@ -60,7 +60,41 @@ function NavPill({ item, pathname, layoutId, onClick, dark = true }) {
   );
 }
 
-export function Nav({ dark = true }) {
+function ThemeToggle({ dark, onToggleDark }) {
+  if (!onToggleDark) return null;
+  return (
+    <button
+      type="button"
+      onClick={onToggleDark}
+      className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
+        dark
+          ? "border-white/15 bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white"
+          : "border-line/80 bg-raised/60 text-ink-soft hover:bg-raised hover:text-ink"
+      }`}
+      aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+      title={dark ? "Switch to light mode" : "Switch to dark mode"}
+      data-testid="theme-toggle"
+    >
+      {dark ? <Sun size={15} /> : <Moon size={15} />}
+    </button>
+  );
+}
+
+// Thin bar pinned to the header's own top edge, filling left-to-right with
+// scroll position (and back again on the way up) — the same cue shuntapp.xyz
+// and veilpass-stellar use so the page never feels static while scrolling.
+function ScrollProgress({ dark }) {
+  const { scrollYProgress } = useScroll();
+  const scaleX = useSpring(scrollYProgress, { stiffness: 300, damping: 40, restDelta: 0.001 });
+  return (
+    <motion.div
+      className="pointer-events-none absolute left-0 top-0 h-[2px] w-full origin-left"
+      style={{ scaleX, background: dark ? "#34d399" : "#0f5a40" }}
+    />
+  );
+}
+
+export function Nav({ dark = true, onToggleDark }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -82,10 +116,11 @@ export function Nav({ dark = true }) {
 
   return (
     <header className={`sticky top-0 z-40 border-b backdrop-blur-xl transition-colors ${
-      dark 
-        ? "border-white/10 bg-[#090b10]/85 text-white" 
+      dark
+        ? "border-white/10 bg-[#090b10]/85 text-white"
         : "border-line/70 bg-surface/85 text-ink"
     }`}>
+      <ScrollProgress dark={dark} />
       <div className="wrap flex h-[64px] items-center justify-between gap-3">
         <Logo dark={dark} />
 
@@ -100,6 +135,7 @@ export function Nav({ dark = true }) {
         </nav>
 
         <div className="hidden items-center gap-2.5 md:flex">
+          <ThemeToggle dark={dark} onToggleDark={onToggleDark} />
           {user ? (
             <>
               <Link to="/app" className={dark ? "rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-xs font-semibold text-zinc-200 hover:bg-white/10 hover:text-white max-w-[180px] truncate" : "btn-secondary btn-sm max-w-[180px]"} data-testid="nav-account">
@@ -118,6 +154,7 @@ export function Nav({ dark = true }) {
         </div>
 
         <div className="flex items-center gap-2 md:hidden">
+          <ThemeToggle dark={dark} onToggleDark={onToggleDark} />
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -194,7 +231,7 @@ export function Footer({ dark = true }) {
         <div>
           <span className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-zinc-300" : "text-ink"}`}>Notice</span>
           <p className={`mt-2 max-w-md text-xs leading-relaxed ${dark ? "text-zinc-500" : "text-ink-faint"}`}>
-            Baseline Work is a scope documentation and estimation instrument. All pricing is derived from verified cost profiles and transparent hourly productivity mathematics.
+            Baseline is a scope documentation and estimation tool, not legal, tax, or financial advice. Pricing is derived from the cost profile and assumptions you provide, computed by deterministic, versioned formulas — never invented by AI.
           </p>
         </div>
       </div>
@@ -202,13 +239,13 @@ export function Footer({ dark = true }) {
   );
 }
 
-export function Shell({ children, dark = true, className = "" }) {
+export function Shell({ children, dark = true, onToggleDark, className = "" }) {
   return (
     <div className={`flex min-h-screen flex-col ${dark ? "dark-shell bg-[#090b10] text-white" : "bg-page text-ink"} ${className}`}>
       <a href="#main-content" className="skip-link">
         Skip to content
       </a>
-      <Nav dark={dark} />
+      <Nav dark={dark} onToggleDark={onToggleDark} />
       <main id="main-content" className="flex-1">{children}</main>
       <Footer dark={dark} />
     </div>

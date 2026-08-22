@@ -2,15 +2,18 @@
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Depends
 
 import pricing
 import scope as scope_mod
 import ai_service
+import rules
 import core
 from core import db, now_utc, iso, clean, resolve_user, resolve_owner
-from models import AnalyzeBody, CostProfileBody, EstimateBody, DealCopyBody, ScopeCheckBody
+from models import AnalyzeBody, CostProfileBody, EstimateBody, DealCopyBody, ScopeCheckBody, ProfessionOverrideBody
+from rate_limit import rate_limit
 
 router = APIRouter(prefix="/api")
 
@@ -70,7 +73,7 @@ def build_scope(ov: dict) -> dict:
 
 
 # -------- analyze --------
-@router.post("/analyze")
+@router.post("/analyze", dependencies=[Depends(rate_limit("analyze", 10, 60))])
 async def analyze(body: AnalyzeBody, request: Request):
     if len(body.brief.strip()) < 15:
         raise HTTPException(status_code=422, detail="Brief is too short to analyze (minimum 15 characters).")
@@ -81,11 +84,10 @@ async def analyze(body: AnalyzeBody, request: Request):
         redaction = scope_mod.redact_pii(brief)
         brief = redaction["text"]
 
-    is_seed_demo = (
-        not body.use_ai
-        or brief.strip() in getattr(scope_mod, "SEED_BRIEFS", {scope_mod.SEED_BRIEF})
-        or brief.strip() == scope_mod.SEED_BRIEF
-    )
+    # The seeded demo is keyed by matching the exact seed brief text, not by the
+    # use_ai flag -- use_ai=False means "analyze my real text deterministically",
+    # not "show the canned demo regardless of what I typed".
+    is_seed_demo = brief.strip() in getattr(scope_mod, "SEED_BRIEFS", {scope_mod.SEED_BRIEF})
 
     seed = None
     if is_seed_demo:
@@ -94,18 +96,29 @@ async def analyze(body: AnalyzeBody, request: Request):
             "fields": seed["fields"],
             "ambiguities": [],
             "clarifications": seed["clarifications"],
+            "provenance": "seed",
         }
+    elif not body.use_ai:
+        extraction = ai_service.extract_scope_heuristic(brief)
     else:
         try:
             extraction = await ai_service.extract_scope(brief)
         except RuntimeError as e:
             raise HTTPException(status_code=503,
                                 detail=f"AI analysis failed ({e}). Try again or use the always-available demo sample.")
+    classification = rules.classify_profession(brief)
+    deal_issues = rules.run_generic_deal_rules(extraction["fields"], extraction.get("ambiguities", []))
+    readiness_state = rules.compute_readiness_state(deal_issues, classification["support_level"])
+
     analysis_id = uuid.uuid4().hex
     doc = {
         "analysis_id": analysis_id, "owner_type": owner_type, "owner_id": owner_id,
         "brief": brief, "is_demo": is_seed_demo, "redaction": redaction,
+        "provenance": extraction.get("provenance", "heuristic_fallback"),
         "state": "COMPLETED" if seed else "NEEDS_CLARIFICATION",
+        "profession": classification["profession"], "support_level": classification["support_level"],
+        "deal_issues": deal_issues, "readiness_state": readiness_state,
+        "rule_version": rules.RULE_VERSION,
         "fields": extraction["fields"],
         "ambiguities": extraction.get("ambiguities", []),
         "clarifications": extraction["clarifications"],
@@ -124,6 +137,33 @@ async def analyze(body: AnalyzeBody, request: Request):
         doc["calibration_trace"] = None
     await db.brief_analyses.insert_one(doc)
     return clean(doc)
+
+
+@router.get("/analyses")
+async def list_analyses(
+    request: Request,
+    readiness_state: Optional[str] = None,
+    profession: Optional[str] = None,
+    limit: int = 50,
+):
+    """Rich analysis history (master plan P1): every past brief this owner
+    (guest or logged-in) analyzed, newest first, filterable by readiness_state
+    or profession. No cost/margin data -- price is already client-safe."""
+    owner_type, owner_id = await resolve_owner(request)
+    query = {"owner_id": owner_id}
+    if readiness_state:
+        query["readiness_state"] = readiness_state
+    if profession:
+        query["profession"] = profession
+    limit = max(1, min(limit, 100))
+    docs = await db.brief_analyses.find(query, {
+        "_id": 0, "analysis_id": 1, "brief": 1, "profession": 1, "support_level": 1,
+        "readiness_state": 1, "price": 1, "is_demo": 1, "created_at": 1, "updated_at": 1,
+    }, sort=[("created_at", -1)]).to_list(length=limit)
+    for d in docs:
+        d["brief_snippet"] = (d.get("brief") or "")[:120]
+        d.pop("brief", None)
+    return {"analyses": docs}
 
 
 async def _owned_analysis(analysis_id: str, request: Request) -> dict:
@@ -148,6 +188,27 @@ async def delete_analysis(analysis_id: str, request: Request):
     return {"ok": True}
 
 
+@router.post("/analysis/{analysis_id}/profession")
+async def override_profession(analysis_id: str, body: ProfessionOverrideBody, request: Request):
+    """Let the user correct classify_profession()'s keyword-heuristic guess --
+    it decides only whether calibrated pricing is offered, so a wrong guess
+    otherwise silently blocks (or wrongly unlocks) the estimate entirely."""
+    doc = await _owned_analysis(analysis_id, request)
+    if body.profession not in rules.KNOWN_PROFESSIONS:
+        raise HTTPException(status_code=422, detail="Unknown profession value.")
+    support_level = rules.support_level_for_profession(body.profession)
+    readiness_state = rules.compute_readiness_state(doc.get("deal_issues", []), support_level)
+    await db.brief_analyses.update_one(
+        {"analysis_id": analysis_id},
+        {"$set": {
+            "profession": body.profession, "support_level": support_level,
+            "readiness_state": readiness_state, "profession_overridden": True,
+            "updated_at": iso(now_utc()),
+        }},
+    )
+    return {"profession": body.profession, "support_level": support_level, "readiness_state": readiness_state}
+
+
 # -------- estimate --------
 def _apply_calibration(est: dict, summary: dict) -> tuple[dict, dict]:
     factor = summary["median_factor"]
@@ -169,7 +230,8 @@ def _apply_calibration(est: dict, summary: dict) -> tuple[dict, dict]:
 
 def _build_pricing(scope: dict, cph: float, target_margin: float, est: dict) -> dict:
     out = {"price": None, "options": None, "whatsapp": None, "decline": None}
-    buffers = scope_mod.derive_buffers(scope)
+    labor_mid = (est["low"] + est["high"]) / 2 * cph
+    buffers = scope_mod.derive_buffers(scope, labor_mid)
     out["price"] = pricing.price_estimate(est["low"], est["high"], cph, 0.0, buffers,
                                           target_margin, scope.get("client_budget"))
     if scope.get("client_budget"):
@@ -180,11 +242,31 @@ def _build_pricing(scope: dict, cph: float, target_margin: float, est: dict) -> 
     return out
 
 
+def _overrides_to_fields(overrides: dict) -> list[dict]:
+    """Re-express user-resolved overrides as evidence-shaped fields so the same
+    Generic Deal Rule Pack can re-check readiness after clarification answers,
+    instead of re-checking the original (now stale) AI extraction."""
+    names = ("quantity", "revision_rounds", "final_duration", "footage_available",
+             "footage_preselected", "deadline_working_days", "approver_count", "client_budget",
+             "acceptance_criteria", "change_boundary")
+    fields = []
+    for name in names:
+        value = overrides.get(name)
+        fields.append({
+            "name": name, "value": value,
+            "status": "missing" if value in (None, "") else "stated",
+            "source_quote": None,
+        })
+    return fields
+
+
 @router.post("/analysis/{analysis_id}/estimate")
 async def estimate(analysis_id: str, body: EstimateBody, request: Request):
     doc = await _owned_analysis(analysis_id, request)
     scope = build_scope(body.scope_overrides)
     est = pricing.estimate_hours(scope)
+    deal_issues = rules.run_generic_deal_rules(_overrides_to_fields(body.scope_overrides), [])
+    readiness_state = rules.compute_readiness_state(deal_issues, doc.get("support_level", "calibrated_estimation"))
     cph, complete = compute_cost_per_hour(body.cost_profile)
     target_margin = body.cost_profile.target_margin
 
@@ -196,11 +278,13 @@ async def estimate(analysis_id: str, body: EstimateBody, request: Request):
             if summary:
                 est, calibration_trace = _apply_calibration(est, summary)
 
-    completeness = pricing.scope_completeness(
-        len(scope_mod.REQUIRED_FIELDS) - scope["unresolved_major_count"] - 2,
-        len(scope_mod.REQUIRED_FIELDS),
-    )
-    parts = _build_pricing(scope, cph, target_margin, est) if (complete and cph) else \
+    completeness = scope_mod.compute_scope_completeness(body.scope_overrides)
+    # Principle #4 (master plan 1.3): an unsupported profession never gets a fabricated
+    # EstimateScenario, no matter how complete its scope looks -- only readiness_state
+    # "ready_to_estimate" (support_level == calibrated_estimation, no open high-severity
+    # issues) is allowed to price. "ready_scope_only" still returns hours/price as None.
+    can_price = complete and cph and readiness_state == "ready_to_estimate"
+    parts = _build_pricing(scope, cph, target_margin, est) if can_price else \
         {"price": None, "options": None, "whatsapp": None, "decline": None}
     price, options = parts["price"], parts["options"]
 
@@ -214,17 +298,23 @@ async def estimate(analysis_id: str, body: EstimateBody, request: Request):
         "risk": risk, "confidence": conf, "options": options,
         "whatsapp": parts["whatsapp"], "decline_message": parts["decline"],
         "calibration_trace": calibration_trace, "scope_used": scope,
+        "deal_issues": deal_issues, "readiness_state": readiness_state,
         "formula_version": pricing.FORMULA_VERSION,
     }
     await db.brief_analyses.update_one(
         {"analysis_id": doc["analysis_id"]},
         {"$set": {
             "state": "ESTIMATED" if price else "READY_TO_ESTIMATE",
+            "deal_issues": deal_issues, "readiness_state": readiness_state,
             "estimate": est, "price": price, "options": options, "risk": risk,
             "confidence": conf, "scope_completeness": completeness,
             "whatsapp": parts["whatsapp"], "decline_message": parts["decline"],
             "cost_profile": {**body.cost_profile.model_dump(), "cost_per_hour": round(cph) if cph else None},
             "scope_used": scope, "calibration_trace": calibration_trace, "updated_at": iso(now_utc()),
+            "deal_terms": {
+                "acceptance_criteria": body.scope_overrides.get("acceptance_criteria"),
+                "change_boundary": body.scope_overrides.get("change_boundary"),
+            },
         }},
     )
     return result
@@ -239,6 +329,8 @@ async def deal_copy(analysis_id: str, body: DealCopyBody, request: Request):
     if len(opts) < 2:
         raise HTTPException(status_code=422, detail="At least two options are required for deal copy.")
     a, b = opts[0], opts[1]
+    if a.get("price") is None or b.get("price") is None:
+        raise HTTPException(status_code=422, detail="Both options must have a price to draft deal copy.")
     price_tokens = [scope_mod.format_idr(a["price"]), scope_mod.format_idr(b["price"])]
     params = {
         "quantity": scope.get("quantity"),
@@ -257,7 +349,7 @@ async def deal_copy(analysis_id: str, body: DealCopyBody, request: Request):
 
 
 # -------- Scope Check (P0.5) --------
-@router.post("/analysis/{analysis_id}/scope-check")
+@router.post("/analysis/{analysis_id}/scope-check", dependencies=[Depends(rate_limit("scope-check", 10, 60))])
 async def scope_check(analysis_id: str, body: ScopeCheckBody, request: Request):
     doc = await _owned_analysis(analysis_id, request)
     agreement = await db.scope_agreements.find_one({"analysis_id": analysis_id}, {"_id": 0},
@@ -286,10 +378,10 @@ async def scope_check(analysis_id: str, body: ScopeCheckBody, request: Request):
             tm = body.cost_profile.target_margin
             est_base = pricing.estimate_hours(base_scope)
             est_new = pricing.estimate_hours(new_scope)
-            p_base = pricing.price_estimate(est_base["low"], est_base["high"], cph, 0.0,
-                                            scope_mod.derive_buffers(base_scope), tm)
-            p_new = pricing.price_estimate(est_new["low"], est_new["high"], cph, 0.0,
-                                           scope_mod.derive_buffers(new_scope), tm)
+            base_buffers = scope_mod.derive_buffers(base_scope, (est_base["low"] + est_base["high"]) / 2 * cph)
+            new_buffers = scope_mod.derive_buffers(new_scope, (est_new["low"] + est_new["high"]) / 2 * cph)
+            p_base = pricing.price_estimate(est_base["low"], est_base["high"], cph, 0.0, base_buffers, tm)
+            p_new = pricing.price_estimate(est_new["low"], est_new["high"], cph, 0.0, new_buffers, tm)
             delta_result = {
                 "hours_delta_low": round(est_new["low"] - est_base["low"], 1),
                 "hours_delta_high": round(est_new["high"] - est_base["high"], 1),

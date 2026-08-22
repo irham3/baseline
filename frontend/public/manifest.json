@@ -1,7 +1,7 @@
 {
-  "short_name": "Baseline Work",
-  "name": "Baseline Work: Pre-Deal Scope Check & Pricing Floor",
-  "description": "Pre-deal scope check, hidden work detector, and pricing floor calculator for short-form video freelancers.",
+  "short_name": "Baseline",
+  "name": "Baseline: AI Pre-Deal Decision System for Freelancers",
+  "description": "Critique a client brief before you quote, then compute a transparent price floor on calibrated work templates.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait-primary",

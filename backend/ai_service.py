@@ -12,6 +12,8 @@ import os
 import re
 import uuid
 
+import rules
+
 try:
     from emergentintegrations.llm.chat import LlmChat, UserMessage
 except ImportError:
@@ -51,6 +53,7 @@ Inputs: footage_available, footage_volume_minutes, footage_preselected, script_a
 Editing complexity: basic_cut, subtitles, motion_graphics_level, color_correction, audio_cleanup, stock_assets, thumbnail
 Workflow: start_condition, deadline_text, deadline_date_if_explicit, approver_count, feedback_method, revision_rounds, source_file_handover
 Commercial: client_budget_amount, client_budget_currency, direct_costs_mentioned, rush_requirement, payment_term_text
+Acceptance & change: acceptance_criteria, change_boundary
 
 OUTPUT
 Return valid JSON only (no markdown) matching this schema:
@@ -123,6 +126,8 @@ FIELD_LABELS = {
     "direct_costs_mentioned": "Direct costs",
     "rush": "Rush",
     "payment_term_text": "Payment terms",
+    "acceptance_criteria": "Definition of done",
+    "change_boundary": "Change boundary",
 }
 
 
@@ -147,9 +152,12 @@ def _currency_to_idr(value):
     nums = _numbers_from_text(text)
     if not nums:
         return value
-    if "juta" in text or " jt" in text:
+    # A digit directly before the unit (e.g. "5jt", no space) is as valid as "5 jt" --
+    # requiring the digit (not just a leading space) avoids false positives like the
+    # "rb" inside "terbaik" while still catching the glued-together colloquial form.
+    if re.search(r"\d\s*(?:juta|jt)\b", text):
         return nums[0] * 1_000_000
-    if "ribu" in text or " rb" in text:
+    if re.search(r"\d\s*(?:ribu|rb)\b", text):
         return nums[0] * 1_000
     digits = re.sub(r"\D", "", text)
     if len(digits) >= 5 and ("rp" in text or "." in text):
@@ -354,6 +362,8 @@ def _heuristic_extract_scope(brief: str) -> dict:
     """Deterministic heuristic extraction fallback that always yields verbatim quotes."""
     fields = []
     text_lower = brief.lower()
+    classification = rules.classify_profession(brief)
+    is_video = classification["profession"] == "short_form_video"
 
     # 1. Quantity & Platform
     q_match = re.search(r"\b(\d+)\s*(reels?|tiktok|video|konten|shorts?)\b", brief, re.IGNORECASE)
@@ -377,11 +387,13 @@ def _heuristic_extract_scope(brief: str) -> dict:
             "name": "platform", "value": plat_match.group(0), "status": "stated",
             "source_quote": plat_match.group(0), "confidence": 0.95, "inference_explanation": None
         })
-    else:
+    elif is_video:
         fields.append({"name": "platform", "value": "Reels / TikTok", "status": "inferred", "source_quote": None, "confidence": 0.6})
 
     # 2. Budget
-    b_match = re.search(r"(?:budget|anggaran|biaya|dana|fee|rate)\s*(?:sekitar|kira-kira|adalah|di|:)?\s*(?:rp\.?\s*)?(\d+(?:[.,]\d+)?\s*(?:juta|jt|ribu|rb|\d{5,}))", brief, re.IGNORECASE)
+    # \w* after the keyword absorbs common Indonesian possessive suffixes glued
+    # directly to the word (e.g. "budgetnya", "dananya") with no space before the amount.
+    b_match = re.search(r"(?:budget|anggaran|biaya|dana|fee|rate)\w*\s*(?:sekitar|kira-kira|adalah|cuma|hanya|di|:)?\s*(?:rp\.?\s*)?(\d+(?:[.,]\d+)?\s*(?:juta|jt|ribu|rb|\d{5,}))", brief, re.IGNORECASE)
     if not b_match:
         b_match = re.search(r"(?:rp\.?\s*)(\d+(?:[.,]\d+)?\s*(?:juta|jt|ribu|rb|\d{5,}))", brief, re.IGNORECASE)
     if b_match:
@@ -415,7 +427,14 @@ def _heuristic_extract_scope(brief: str) -> dict:
             "inference_explanation": "Client requested unlimited/unbounded revisions."
         })
     else:
+        # "2x revisi" / "revisi 2 kali" (number-first) or the more common Indonesian
+        # "revisi maksimal 2x" / "revisinya cuma 2x" (revisi-word-first) order.
         num_rev = re.search(r"(\d+)\s*(?:kali|x|round)?\s*revisi", brief, re.IGNORECASE)
+        if not num_rev:
+            num_rev = re.search(
+                r"revisi\w*\s*(?:maksimal|max|paling\s+banyak|cuma|hanya)?\s*(\d+)\s*(?:kali|x|round)?",
+                brief, re.IGNORECASE,
+            )
         if num_rev:
             fields.append({
                 "name": "revision_rounds", "value": int(num_rev.group(1)), "status": "stated",
@@ -431,65 +450,161 @@ def _heuristic_extract_scope(brief: str) -> dict:
             "name": "footage_available", "value": True, "status": "stated",
             "source_quote": ft_match.group(0), "confidence": 0.90, "inference_explanation": None
         })
-    else:
+    elif is_video:
         fields.append({"name": "footage_available", "value": True, "status": "inferred", "source_quote": None, "confidence": 0.6})
 
-    # Other required short-form fields marked explicitly
-    fields.append({"name": "final_duration", "value": None, "status": "missing", "source_quote": None, "confidence": 0.5})
-    fields.append({"name": "footage_hours", "value": None, "status": "missing", "source_quote": None, "confidence": 0.5})
-    fields.append({"name": "footage_preselected", "value": False, "status": "inferred", "source_quote": None, "confidence": 0.6})
-    fields.append({"name": "scripting", "value": False, "status": "inferred", "source_quote": None, "confidence": 0.6})
-    fields.append({"name": "subtitles", "value": True, "status": "inferred", "source_quote": None, "confidence": 0.7})
-    fields.append({"name": "motion_level", "value": "basic", "status": "inferred", "source_quote": None, "confidence": 0.7})
-    fields.append({"name": "approver_count", "value": 1, "status": "inferred", "source_quote": None, "confidence": 0.6})
-    fields.append({"name": "aspect_ratio", "value": "9:16", "status": "inferred", "source_quote": None, "confidence": 0.9})
-    fields.append({"name": "resolution", "value": "1080x1920", "status": "inferred", "source_quote": None, "confidence": 0.9})
+    # Final duration ("30 detik", "durasi 1 menit", "45 second")
+    dur_match = re.search(r"(\d+(?:[.,]\d+)?)\s*(detik|second|sec|menit|minute|min)\b", brief, re.IGNORECASE)
+    if dur_match:
+        quote = dur_match.group(0)
+        num = float(dur_match.group(1).replace(",", "."))
+        unit = dur_match.group(2).lower()
+        seconds = num * 60 if unit in ("menit", "minute", "min") else num
+        fields.append({
+            "name": "final_duration", "value": seconds, "status": "stated",
+            "source_quote": quote, "confidence": 0.9, "inference_explanation": None
+        })
+    else:
+        fields.append({"name": "final_duration", "value": None, "status": "missing", "source_quote": None, "confidence": 0.5})
 
-    clarifications = [
-        {
-            "id": f"q_{uuid.uuid4().hex[:6]}",
-            "question": "What is the final duration for each video?",
-            "why": "Final duration determines raw cutting time and subtitle pacing.",
-            "impact": ["time", "cost"],
-            "priority": 1,
-            "affected_fields": ["final_duration"],
-            "answer": None,
-        },
-        {
-            "id": f"q_{uuid.uuid4().hex[:6]}",
-            "question": "Is raw footage pre-selected or does the editor need to review all takes?",
-            "why": "Sifting through unselected raw footage adds significant unpaid review hours.",
-            "impact": ["time", "cost"],
-            "priority": 2,
-            "affected_fields": ["footage_preselected", "footage_hours"],
-            "answer": None,
-        },
-        {
-            "id": f"q_{uuid.uuid4().hex[:6]}",
-            "question": "How many consolidated revision rounds are included?",
-            "why": "Unbounded revisions are the #1 cause of margin loss and project fatigue.",
-            "impact": ["revision"],
-            "priority": 3,
-            "affected_fields": ["revision_rounds"],
-            "answer": None,
-        },
-        {
-            "id": f"q_{uuid.uuid4().hex[:6]}",
-            "question": "How many stakeholders will provide feedback and approve deliverables?",
-            "why": "Multiple approvers with conflicting feedback increase revision cycle time.",
-            "impact": ["dependency", "revision"],
-            "priority": 4,
-            "affected_fields": ["approver_count"],
-            "answer": None,
-        }
-    ]
+    # Approver applies to any profession; the rest below is short-form-video
+    # shaped (aspect ratio, motion graphics, subtitles) and would otherwise
+    # show fabricated inferred values -- e.g. "Aspect ratio: 9:16" -- on a
+    # website/software brief that never asked for video at all.
+    fields.append({"name": "approver_count", "value": 1, "status": "inferred", "source_quote": None, "confidence": 0.6})
+    if is_video:
+        fields.append({"name": "footage_hours", "value": None, "status": "missing", "source_quote": None, "confidence": 0.5})
+        fields.append({"name": "footage_preselected", "value": False, "status": "inferred", "source_quote": None, "confidence": 0.6})
+        fields.append({"name": "scripting", "value": False, "status": "inferred", "source_quote": None, "confidence": 0.6})
+        fields.append({"name": "subtitles", "value": True, "status": "inferred", "source_quote": None, "confidence": 0.7})
+        fields.append({"name": "motion_level", "value": "basic", "status": "inferred", "source_quote": None, "confidence": 0.7})
+        fields.append({"name": "aspect_ratio", "value": "9:16", "status": "inferred", "source_quote": None, "confidence": 0.9})
+        fields.append({"name": "resolution", "value": "1080x1920", "status": "inferred", "source_quote": None, "confidence": 0.9})
+
+    # Acceptance criteria / change boundary: clients almost never state these in a
+    # casual WhatsApp brief, so recall is deliberately low -- a false "stated" is far
+    # more dangerous here than a missing field the rule pack can flag instead.
+    acc_match = re.search(
+        r"\b(?:dianggap\s+)?(?:selesai|beres|acc|approve\w*|fix|final)\s+"
+        r"(?:kalau|kalo|jika|apabila|setelah|begitu)\s+[^.,;\n]{3,80}",
+        brief, re.IGNORECASE)
+    if acc_match:
+        quote = acc_match.group(0).strip()
+        fields.append({"name": "acceptance_criteria", "value": quote, "status": "stated",
+                       "source_quote": quote, "confidence": 0.75, "inference_explanation": None})
+    else:
+        fields.append({"name": "acceptance_criteria", "value": None, "status": "missing",
+                       "source_quote": None, "confidence": 0.5})
+
+    cb_match = re.search(
+        r"\b(?:ganti|ubah|perubahan|revisi)\s+(?:konsep|concept|format|storyboard|ide)\b[^.,;\n]{0,60}",
+        brief, re.IGNORECASE)
+    if cb_match:
+        quote = cb_match.group(0).strip()
+        fields.append({"name": "change_boundary", "value": quote, "status": "stated",
+                       "source_quote": quote, "confidence": 0.70, "inference_explanation": None})
+    else:
+        fields.append({"name": "change_boundary", "value": None, "status": "missing",
+                       "source_quote": None, "confidence": 0.5})
+
+    if is_video:
+        clarifications = [
+            {
+                "id": f"q_{uuid.uuid4().hex[:6]}",
+                "question": "What is the final duration for each video?",
+                "why": "Final duration determines raw cutting time and subtitle pacing.",
+                "impact": ["time", "cost"],
+                "priority": 1,
+                "affected_fields": ["final_duration"],
+                "answer": None,
+            },
+            {
+                "id": f"q_{uuid.uuid4().hex[:6]}",
+                "question": "Is raw footage pre-selected or does the editor need to review all takes?",
+                "why": "Sifting through unselected raw footage adds significant unpaid review hours.",
+                "impact": ["time", "cost"],
+                "priority": 2,
+                "affected_fields": ["footage_preselected", "footage_hours"],
+                "answer": None,
+            },
+            {
+                "id": f"q_{uuid.uuid4().hex[:6]}",
+                "question": "How many consolidated revision rounds are included?",
+                "why": "Unbounded revisions are the #1 cause of margin loss and project fatigue.",
+                "impact": ["revision"],
+                "priority": 3,
+                "affected_fields": ["revision_rounds"],
+                "answer": None,
+            },
+            {
+                "id": f"q_{uuid.uuid4().hex[:6]}",
+                "question": "How many stakeholders will provide feedback and approve deliverables?",
+                "why": "Multiple approvers with conflicting feedback increase revision cycle time.",
+                "impact": ["dependency", "revision"],
+                "priority": 4,
+                "affected_fields": ["approver_count"],
+                "answer": None,
+            },
+        ]
+    else:
+        # Non-video (e.g. website/software) profession: this template is not
+        # calibrated, so these stay pure critique-only questions -- ontology
+        # hints per master plan §8.4, never a step toward a fabricated
+        # hour/price estimate for a profession with no validated formula.
+        clarifications = [
+            {
+                "id": f"q_{uuid.uuid4().hex[:6]}",
+                "question": "What authentication method does this need (email/password, Google, phone OTP, none)?",
+                "why": "Auth method changes setup work and whether a third-party identity provider is required.",
+                "impact": ["time", "cost"],
+                "priority": 1,
+                "affected_fields": [],
+                "answer": None,
+            },
+            {
+                "id": f"q_{uuid.uuid4().hex[:6]}",
+                "question": "Does this need payment processing, and if so, which provider?",
+                "why": "Payment integration adds compliance, testing, and third-party account setup work.",
+                "impact": ["time", "cost", "dependency"],
+                "priority": 2,
+                "affected_fields": [],
+                "answer": None,
+            },
+            {
+                "id": f"q_{uuid.uuid4().hex[:6]}",
+                "question": "What user roles exist (e.g. admin, customer, staff) and what can each one do?",
+                "why": "Each role usually means a separate set of screens and access rules to build.",
+                "impact": ["time", "cost"],
+                "priority": 3,
+                "affected_fields": [],
+                "answer": None,
+            },
+            {
+                "id": f"q_{uuid.uuid4().hex[:6]}",
+                "question": "Where will this be deployed and hosted, and who provides that access?",
+                "why": "Deployment/hosting is a dependency that can block delivery even after the build is done.",
+                "impact": ["dependency", "timeline"],
+                "priority": 4,
+                "affected_fields": [],
+                "answer": None,
+            },
+        ]
 
     return {
-        "profession": "short_form_video",
+        "profession": classification["profession"],
         "fields": fields,
         "ambiguities": [],
         "clarifications": clarifications,
     }
+
+
+def extract_scope_heuristic(brief: str) -> dict:
+    """Deterministic, non-AI extraction. Used both as the automatic fallback when the
+    LLM is unavailable/fails, and directly when the caller explicitly opts out of AI."""
+    parsed = _heuristic_extract_scope(brief)
+    result = _validate_and_normalize(parsed, brief)
+    result["provenance"] = "heuristic_fallback"
+    return result
 
 
 async def extract_scope(brief: str) -> dict:
@@ -511,13 +626,14 @@ async def extract_scope(brief: str) -> dict:
             raw = await chat.send_message(UserMessage(text=user_text))
             parsed = json.loads(_strip_fences(raw))
             if isinstance(parsed, dict) and "fields" in parsed:
-                return _validate_and_normalize(parsed, brief)
+                result = _validate_and_normalize(parsed, brief)
+                result["provenance"] = "ai"
+                return result
         except Exception:
             pass  # Fall through to deterministic heuristic fallback
 
     # Deterministic heuristic fallback ensuring 100% availability with verbatim quotes
-    parsed_heuristic = _heuristic_extract_scope(brief)
-    return _validate_and_normalize(parsed_heuristic, brief)
+    return extract_scope_heuristic(brief)
 
 
 

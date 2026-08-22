@@ -9,9 +9,11 @@ from __future__ import annotations
 import math
 from typing import Optional
 
-FORMULA_VERSION = "1.0.0"
+FORMULA_VERSION = "1.1.0"
 
-# Default daily productive capacity (hours) used only for deadline feasibility checks.
+# Default daily productive capacity (hours) used for deadline feasibility and timeline math.
+# This is a configurable operational assumption (a solo editor's realistic focused hours per
+# working day), not a universal market truth. Freelancers with different setups can differ.
 DAILY_CAPACITY_HOURS = 6.0
 
 
@@ -71,6 +73,33 @@ TASK_UNITS = {
 # and flag the risk trigger separately.
 ASSUMED_UNLIMITED_REVISION_ROUNDS = 3
 
+# Default final duration (seconds) assumed when the brief never states or resolves it.
+# 30s is the reference length: it carries the 1.0x multiplier below.
+DEFAULT_DURATION_SECONDS = 30.0
+
+# Duration bands scale the per-video editing bundle (rough cut, fine cut, export/QC,
+# subtitle, audio, color, motion). Longer final videos need more cutting, pacing, and
+# QA time even when quantity and complexity toggles are unchanged. Bands are a named,
+# explainable, configurable operational assumption -- not a universal market constant.
+# Each entry: (max_seconds_inclusive_or_None, (low_multiplier, high_multiplier), label).
+DURATION_BANDS = [
+    (15, (0.70, 0.75), "up to 15s"),
+    (30, (1.00, 1.00), "16-30s (reference length)"),
+    (60, (1.35, 1.40), "31-60s"),
+    (90, (1.65, 1.75), "61-90s"),
+    (None, (1.90, 2.05), "91s+"),
+]
+
+
+def duration_multiplier(final_duration_seconds) -> tuple[float, float, str]:
+    """Return (low_multiplier, high_multiplier, band_label) for a final video duration."""
+    d = float(final_duration_seconds) if final_duration_seconds else DEFAULT_DURATION_SECONDS
+    _require(d > 0, "Final duration must be greater than 0")
+    for max_s, (lo, hi), label in DURATION_BANDS:
+        if max_s is None or d <= max_s:
+            return lo, hi, label
+    return DURATION_BANDS[-1][1][0], DURATION_BANDS[-1][1][1], DURATION_BANDS[-1][2]
+
 
 def estimate_hours(scope: dict) -> dict:
     """Compute an hour range from a resolved scope state. Returns low/high + named breakdown."""
@@ -122,7 +151,15 @@ def estimate_hours(scope: dict) -> dict:
         base_low += TASK_UNITS["motion_custom"][0]
         base_high += TASK_UNITS["motion_custom"][1]
         parts.append("motion graphics")
-    add(f"Editing x {q} {plural(q, 'video')} ({', '.join(parts)})", base_low * q, base_high * q)
+
+    dur_lo_mult, dur_hi_mult, dur_label = duration_multiplier(scope.get("final_duration"))
+    base_low *= dur_lo_mult
+    base_high *= dur_hi_mult
+    add(
+        f"Editing x {q} {plural(q, 'video')} ({', '.join(parts)}; duration band {dur_label}, "
+        f"x{dur_lo_mult:g}-{dur_hi_mult:g})",
+        base_low * q, base_high * q,
+    )
 
     # Communication & approval
     ac = int(scope.get("approver_count") or 1)
@@ -223,6 +260,54 @@ def scope_completeness(resolved_required: int, total_required: int) -> dict:
 def required_days(hours_low: float, daily_capacity: float = DAILY_CAPACITY_HOURS) -> int:
     _require(daily_capacity > 0, "Daily capacity must be greater than 0")
     return math.ceil(hours_low / daily_capacity)
+
+
+def project_timeline(
+    hours_high: float,
+    *,
+    footage_preselected: bool = True,
+    revision_rounds: int = 0,
+    approver_count: int = 1,
+    rush: bool = False,
+    daily_capacity: float = DAILY_CAPACITY_HOURS,
+) -> dict:
+    """Deterministic delivery timeline derived from hours, asset readiness, review
+    turnaround, and rush conditions. No fixed day counts. Every caller gets a named
+    trace explaining each contribution so the UI can show its work."""
+    _require(daily_capacity > 0, "Daily capacity must be greater than 0")
+    _require(hours_high >= 0, "Hours must be non-negative")
+    trace: list[dict] = []
+
+    production_days = math.ceil(hours_high / daily_capacity) if hours_high > 0 else 0
+    trace.append({
+        "label": f"Production at {daily_capacity:g}h/day capacity",
+        "days": production_days,
+    })
+
+    asset_days = 0
+    if not footage_preselected:
+        asset_days = 1
+        trace.append({"label": "Asset readiness (footage not pre-selected)", "days": asset_days})
+
+    review_days = 0
+    rr = int(revision_rounds or 0)
+    if rr > 0:
+        per_round = 0.5 if rush else 1.0
+        review_days = math.ceil(rr * per_round)
+        ac = int(approver_count or 1)
+        if ac >= 2:
+            review_days += 1
+        trace.append({
+            "label": (
+                f"Client review & approval ({rr} round(s), {ac} approver(s), "
+                f"{'rush' if rush else 'standard'} turnaround)"
+            ),
+            "days": review_days,
+        })
+
+    total_days = production_days + asset_days + review_days
+    trace.append({"label": "Total working days", "days": total_days})
+    return {"total_days": total_days, "trace": trace, "daily_capacity": daily_capacity}
 
 
 def risk_triggers(scope: dict, estimate: dict, price: dict) -> dict:

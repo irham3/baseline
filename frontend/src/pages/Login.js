@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { client, apiErrorMessage } from "@/lib/api";
 
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || "";
+const THEME_KEY = "baseline-landing-theme";
 
 function GoogleMark() {
   return (
@@ -29,6 +30,22 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const googleBtnRef = useRef(null);
+  const [dark, setDark] = useState(() => {
+    try {
+      return localStorage.getItem(THEME_KEY) !== "light";
+    } catch {
+      return true;
+    }
+  });
+  const toggleDark = () => {
+    setDark((d) => {
+      const next = !d;
+      try {
+        localStorage.setItem(THEME_KEY, next ? "dark" : "light");
+      } catch { /* ignore storage failures */ }
+      return next;
+    });
+  };
 
   // Handle Google Token Response from GSI
   const handleGoogleCredentialResponse = useCallback(async (response) => {
@@ -122,6 +139,14 @@ export default function Login() {
     }
   };
 
+  const authErrorMessage = (detail) => {
+    const tooShortPassword = Array.isArray(detail) && detail.some(
+      (e) => e?.loc?.includes("password") && e?.type === "string_too_short"
+    );
+    if (tooShortPassword) return "Password must be at least 6 characters.";
+    return apiErrorMessage(detail);
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -135,17 +160,17 @@ export default function Login() {
       setUser(data);
       navigate("/app");
     } catch (e) {
-      setError(apiErrorMessage(e.response?.data?.detail) || "Sign-in failed.");
+      setError(authErrorMessage(e.response?.data?.detail) || "Sign-in failed.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Shell>
+    <Shell dark={dark} onToggleDark={toggleDark}>
       <SEO
-        title="Sign In / Register — Baseline Work"
-        description="Sign in to your Baseline Work account to save client cost profiles, project calibration records, and historical scope analyses."
+        title="Sign In / Register — Baseline"
+        description="Sign in to your Baseline account to save client cost profiles, project calibration records, and historical scope analyses."
         canonical="/login"
       />
       <div className="wrap flex min-h-[70vh] items-center justify-center py-10">
@@ -170,6 +195,11 @@ export default function Login() {
                   {googleLoading ? <Spinner size={18} /> : <GoogleMark />}
                   <span>{googleLoading ? "Signing in with Google..." : "Continue with Google"}</span>
                 </button>
+              )}
+              {!GOOGLE_CLIENT_ID && !googleLoading && (
+                <p className="mt-1.5 text-center text-[11px] text-ink-faint" data-testid="google-redirect-notice">
+                  You'll be redirected to a separate page to complete Google sign-in.
+                </p>
               )}
             </div>
 
@@ -200,7 +230,7 @@ export default function Login() {
                     className="input"
                     autoComplete="name"
                     value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    onChange={(e) => { setForm({ ...form, name: e.target.value }); setError(null); }}
                     data-testid="login-name"
                   />
                 </label>
@@ -214,7 +244,7 @@ export default function Login() {
                   className="input"
                   autoComplete="email"
                   value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  onChange={(e) => { setForm({ ...form, email: e.target.value }); setError(null); }}
                   data-testid="login-email"
                 />
               </label>
@@ -229,7 +259,7 @@ export default function Login() {
                   autoComplete={mode === "login" ? "current-password" : "new-password"}
                   placeholder="Minimum 6 characters"
                   value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  onChange={(e) => { setForm({ ...form, password: e.target.value }); setError(null); }}
                   data-testid="login-password"
                 />
               </label>
