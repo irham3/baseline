@@ -37,7 +37,7 @@ Saat ini yang serve port 3000 adalah `serve -s build` (bundle production, filena
 
 ```bash
 cd backend
-.venv/Scripts/python.exe -m pytest tests/ -q --ignore=tests/backend_test.py   # unit (118 test, per 2026-08-22)
+.venv/Scripts/python.exe -m pytest tests/ -q --ignore=tests/backend_test.py   # unit (119 test, per 2026-08-22)
 REACT_APP_BACKEND_URL=http://127.0.0.1:8001 .venv/Scripts/python.exe -m pytest tests/backend_test.py -q  # E2E live (17 test), backend harus jalan dulu
 
 cd frontend
@@ -51,13 +51,20 @@ CI=true npm run build   # harus "Compiled successfully" — ini JUGA deploy step
 
 ## Status Pengerjaan
 
-Semua di bawah ini **sudah di-push ke `origin/rifqi`**, sudah lolos 118 unit test, dan sudah diverifikasi manual langsung di Chrome (bukan cuma lolos test — didogfooding sungguhan, klik-klik tiap tombol).
+Semua di bawah ini **sudah di-push ke `origin/rifqi`**, sudah lolos 119 unit test, dan sudah diverifikasi manual langsung di Chrome (bukan cuma lolos test — didogfooding sungguhan, klik-klik tiap tombol).
+
+### Audit master plan P0/P0.5 (22 Aug 2026) — semua item yang direncanakan dokumen "sekarang" sudah tuntas
+
+Diaudit sistematis terhadap §17.1 (24 item P0) dan §17.6 (13 acceptance criteria): 21/24 sudah ada sejak sebelumnya, 3 gap ditemukan dan **semuanya sudah dikerjakan** sesi ini (lihat detail commit di bawah): #4 profession classification editable, #24 No-AI-Slop quality bar (§16.6 — ternyata itu checklist audit 6-lensa, bukan fitur kode; diaudit statis, bersih dari pelanggaran), dan 2 item P0.5 (sample unsupported profession, shareable result image). **Sengaja TIDAK dikerjakan**: §17.3 P1 dan §17.4 Post-contest (dokumen sendiri bilang "setelah submission dasar"/"post-contest", bukan sekarang), dan §17.5 "Jangan dibangun sebelum deadline" (payment gateway, escrow, CRM, dll — dokumen eksplisit melarang).
+
+**Keterbatasan yang jujur perlu dicatat**: lensa "Mobile craft" (visual 375px) tidak bisa diverifikasi langsung di browser — `resize_window` tool tidak benar-benar mengecilkan viewport CSS di lingkungan ini (window resize ke 375px tetap menghasilkan `innerWidth` 1022px), dan trik iframe alternatif diblokir CSP `frame-ancestors 'none'` (itu sendiri fitur keamanan yang benar, bukan bug). Audit kode statis (grep Tailwind responsive classes, cek fixed-width overflow) tidak menemukan pelanggaran, tapi ini bukan pengganti verifikasi visual sungguhan.
 
 ### Fitur/perbaikan besar (kronologis)
 
 0a. **Generic Deal Rule Pack lengkap — 9/9 kriteria §4.3 master plan** (22 Aug 2026, commit `a7937666` + `4a755053`) — 2 kriteria yang tadinya hilang (**acceptance clarity**, **change boundary**) sekarang diimplementasi penuh, termasuk jalur resolve-nya (bukan cuma card kritik yang muncul selamanya): freelancer bisa deklarasi lewat 2 dropdown preset baru di Clarification Gate ("Terms you define"), atau otomatis ter-ekstrak dari brief kalau klien kebetulan menyebutkannya. Severity `medium` (tidak menggerbang readiness). Nilai bertahan setelah reload (`deal_terms` di dokumen analisis — bug data-loss D10 ditemukan & diperbaiki saat desain, sebelum sempat ke produksi). Tampil juga di Agreement Sheet publik. Detail lengkap: `RENCANA-acceptance-change-boundary.md` (5 fase, semua sudah dieksekusi) dan `PENUGASAN-AI.md`.
 0b. **Fix bug parsing budget tanpa spasi** (22 Aug 2026, commit `6cdf9c2a`) — `_currency_to_idr()` di `ai_service.py` gagal parse `"5jt"` (angka+satuan nempel tanpa spasi, pola kasual Indonesia yang umum) karena syaratnya `" jt"` pakai spasi di depan; hasilnya diam-diam jadi `5` bukan `5.000.000`. **Dampak nyata, bukan cuma salah tampilan**: budget yang salah bikin engine estimasi keliru bilang "budget di bawah break-even" dan mematikan Option A (`no_viable_scope`) padahal budgetnya sebenarnya cukup. Ketemu tidak sengaja saat verifikasi browser fitur di atas. Fix: syaratkan digit langsung sebelum satuan (bukan wajib spasi) — tetap aman dari false-positive "rb" di tengah kata seperti "terbaik".
 0c. **Profession classification jadi editable** (22 Aug 2026, commit `927782ec`) — master plan P0 item #4 minta klasifikasi profesi "editable", tapi `classify_profession()` (keyword heuristic, docstring-nya sendiri sudah bilang "tentative, editable") tidak pernah punya UI edit. Brief video yang kebetulan menyebut kata non-video (mis. "aplikasi") salah terklasifikasi "general" dan kehilangan pricing terkalibrasi selamanya. Endpoint baru `POST /analysis/{id}/profession` (cuma terima `short_form_video`/`general`, 422 kalau lain) menghitung ulang `support_level`+`readiness_state`, persisten lewat `profession_overridden` flag. FE: dropdown kompak "Project type" di header dekat badge provenance — begitu diganti, form Cost Profile langsung terbuka tanpa reload. Diverifikasi live: brief salah klasifikasi → dikoreksi → langsung dapat price floor nyata.
+0d. **Sample unsupported-profession & shareable result image** (22 Aug 2026, commit `0924d822` + `23c63c47`) — 2 item P0.5. Tombol "Try a non-video sample" di landing (brief website/programmer, dikunci dengan regression test karena jadi jalur demo yang mungkin dilihat juri) menunjukkan critique-only honesty gate: 7 issue kritik tetap muncul, tapi tidak ada estimasi harga yang dipalsukan. "Download result image" di halaman analisis — kartu PNG 1200x630 via Canvas API native (tanpa dependency baru), baca CSS custom property tema secara live, ikut kontrak privasi yang sama seperti Agreement Sheet (tidak pernah menampilkan cost/margin internal).
 
 1. **Integritas pricing & keamanan Agreement Sheet** — durasi video memengaruhi jam kerja, timeline dihitung (bukan hardcode 7/10/21 hari), Option A tidak lagi memalsukan "sesuai budget" kalau memang tidak layak (jadi `no_viable_scope` yang jujur), buffer scale-aware (persen dari labor cost, bukan angka tetap), Agreement Sheet tidak bisa ditampering dari browser (server resolve `option_id` sendiri, harga/qty tidak pernah dipercaya dari client).
 2. **Judge Mode nyata** (`/judge`) — 8 step deterministik tanpa login, teruji end-to-end termasuk create+approve Agreement Sheet ke backend live. Plus `/analyze` (route yang sebelumnya broken link dari Workspace/Analysis).
