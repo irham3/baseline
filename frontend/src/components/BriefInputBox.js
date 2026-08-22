@@ -6,6 +6,12 @@ import { Spinner } from "@/components/ui/primitives";
 
 const SAMPLE_BRIEF = "Hi, I need 12 Reels for next month's campaign. I will send the footage later. Budget is IDR 3M, ideally finished next week. Revisions until it feels right.";
 
+// Demonstrates the critique-only honesty gate (master plan P0.5): an unsupported
+// profession still gets the full Generic Deal Rule Pack critique, but Baseline
+// never fabricates an hour/price estimate for it -- readiness_state stays
+// "ready_scope_only" and price/options stay null no matter how complete the scope.
+const SAMPLE_BRIEF_UNSUPPORTED = "Bikin website toko online, ada login dan dashboard admin, butuh programmer buat develop dari nol. Budget 6 juta, deadline satu bulan.";
+
 export default function BriefInputBox() {
   const [brief, setBrief] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
@@ -53,13 +59,13 @@ export default function BriefInputBox() {
     }
   };
 
-  const handleDemo = async () => {
+  const runSample = async (sampleBrief) => {
     setError(null);
-    setBrief(SAMPLE_BRIEF);
+    setBrief(sampleBrief);
     setAnalyzing(true);
     try {
       const res = await client.post("/analyze", {
-        brief: SAMPLE_BRIEF,
+        brief: sampleBrief,
         use_ai: false,
         redact: false,
       });
@@ -69,6 +75,8 @@ export default function BriefInputBox() {
       setAnalyzing(false);
     }
   };
+  const handleDemo = () => runSample(SAMPLE_BRIEF);
+  const handleUnsupportedSample = () => runSample(SAMPLE_BRIEF_UNSUPPORTED);
 
   return (
     <div className="relative rounded-2xl border border-line/15 bg-surface/90 p-2 backdrop-blur-xl shadow-2xl focus-within:border-green/50 transition-colors">
@@ -144,6 +152,16 @@ export default function BriefInputBox() {
             {error && (
               <span className="mr-auto text-xs font-semibold text-danger" data-testid="brief-error">{error}</span>
             )}
+            <button
+              type="button"
+              onClick={handleUnsupportedSample}
+              disabled={analyzing}
+              className="text-xs font-semibold text-ink-faint hover:text-ink-soft transition-colors px-4 py-2"
+              data-testid="brief-sample-unsupported"
+              title="See how Baseline handles a project type it can't price yet"
+            >
+              Try a non-video sample
+            </button>
             <button
               type="button"
               onClick={handleDemo}

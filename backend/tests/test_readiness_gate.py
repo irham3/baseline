@@ -108,6 +108,38 @@ def test_acceptance_and_change_boundary_resolve_from_overrides():
     assert data["readiness_state"] == "ready_to_estimate"
 
 
+def test_unsupported_sample_brief_button_stays_general():
+    """Locks in the exact brief text behind BriefInputBox.js's "Try a non-video
+    sample" button (master plan P0.5 honesty-gate demo) -- if a future change to
+    classify_profession() ever reclassifies it, this demo would silently start
+    showing the wrong behavior, possibly in front of a contest judge."""
+    headers = _guest_headers()
+    doc = _analyze(
+        "Bikin website toko online, ada login dan dashboard admin, "
+        "butuh programmer buat develop dari nol. Budget 6 juta, deadline satu bulan.",
+        headers,
+    )
+    assert doc["profession"] == "general"
+    assert doc["support_level"] == "critique_only"
+    # Deal issues from the raw extraction may still include open high-severity
+    # ones (e.g. revision boundary not stated) -- that alone forces
+    # not_ready_to_quote regardless of support_level. The honesty-gate
+    # guarantee this demo exists to prove is narrower: no price is ever
+    # fabricated for this profession, no matter how the scope resolves.
+    assert doc["readiness_state"] in ("not_ready_to_quote", "ready_scope_only")
+    assert doc["estimate"] is None
+    assert doc["price"] is None
+
+    r = client.post(f"/api/analysis/{doc['analysis_id']}/estimate", headers=headers, json={
+        "cost_profile": COST_PROFILE, "scope_overrides": FULLY_RESOLVED_OVERRIDES,
+    })
+    assert r.status_code == 200, r.text
+    resolved = r.json()
+    assert resolved["readiness_state"] == "ready_scope_only"
+    assert resolved["price"] is None
+    assert resolved["options"] is None
+
+
 def test_profession_override_from_calibrated_to_general_blocks_pricing():
     """The keyword classifier is a guess, not a trained model -- a video brief
     that happens to mention e.g. "website" gets misclassified as general, and
