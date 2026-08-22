@@ -12,6 +12,8 @@ import os
 import re
 import uuid
 
+import rules
+
 try:
     from emergentintegrations.llm.chat import LlmChat, UserMessage
 except ImportError:
@@ -360,6 +362,8 @@ def _heuristic_extract_scope(brief: str) -> dict:
     """Deterministic heuristic extraction fallback that always yields verbatim quotes."""
     fields = []
     text_lower = brief.lower()
+    classification = rules.classify_profession(brief)
+    is_video = classification["profession"] == "short_form_video"
 
     # 1. Quantity & Platform
     q_match = re.search(r"\b(\d+)\s*(reels?|tiktok|video|konten|shorts?)\b", brief, re.IGNORECASE)
@@ -383,7 +387,7 @@ def _heuristic_extract_scope(brief: str) -> dict:
             "name": "platform", "value": plat_match.group(0), "status": "stated",
             "source_quote": plat_match.group(0), "confidence": 0.95, "inference_explanation": None
         })
-    else:
+    elif is_video:
         fields.append({"name": "platform", "value": "Reels / TikTok", "status": "inferred", "source_quote": None, "confidence": 0.6})
 
     # 2. Budget
@@ -446,7 +450,7 @@ def _heuristic_extract_scope(brief: str) -> dict:
             "name": "footage_available", "value": True, "status": "stated",
             "source_quote": ft_match.group(0), "confidence": 0.90, "inference_explanation": None
         })
-    else:
+    elif is_video:
         fields.append({"name": "footage_available", "value": True, "status": "inferred", "source_quote": None, "confidence": 0.6})
 
     # Final duration ("30 detik", "durasi 1 menit", "45 second")
@@ -463,15 +467,19 @@ def _heuristic_extract_scope(brief: str) -> dict:
     else:
         fields.append({"name": "final_duration", "value": None, "status": "missing", "source_quote": None, "confidence": 0.5})
 
-    # Other required short-form fields marked explicitly
-    fields.append({"name": "footage_hours", "value": None, "status": "missing", "source_quote": None, "confidence": 0.5})
-    fields.append({"name": "footage_preselected", "value": False, "status": "inferred", "source_quote": None, "confidence": 0.6})
-    fields.append({"name": "scripting", "value": False, "status": "inferred", "source_quote": None, "confidence": 0.6})
-    fields.append({"name": "subtitles", "value": True, "status": "inferred", "source_quote": None, "confidence": 0.7})
-    fields.append({"name": "motion_level", "value": "basic", "status": "inferred", "source_quote": None, "confidence": 0.7})
+    # Approver applies to any profession; the rest below is short-form-video
+    # shaped (aspect ratio, motion graphics, subtitles) and would otherwise
+    # show fabricated inferred values -- e.g. "Aspect ratio: 9:16" -- on a
+    # website/software brief that never asked for video at all.
     fields.append({"name": "approver_count", "value": 1, "status": "inferred", "source_quote": None, "confidence": 0.6})
-    fields.append({"name": "aspect_ratio", "value": "9:16", "status": "inferred", "source_quote": None, "confidence": 0.9})
-    fields.append({"name": "resolution", "value": "1080x1920", "status": "inferred", "source_quote": None, "confidence": 0.9})
+    if is_video:
+        fields.append({"name": "footage_hours", "value": None, "status": "missing", "source_quote": None, "confidence": 0.5})
+        fields.append({"name": "footage_preselected", "value": False, "status": "inferred", "source_quote": None, "confidence": 0.6})
+        fields.append({"name": "scripting", "value": False, "status": "inferred", "source_quote": None, "confidence": 0.6})
+        fields.append({"name": "subtitles", "value": True, "status": "inferred", "source_quote": None, "confidence": 0.7})
+        fields.append({"name": "motion_level", "value": "basic", "status": "inferred", "source_quote": None, "confidence": 0.7})
+        fields.append({"name": "aspect_ratio", "value": "9:16", "status": "inferred", "source_quote": None, "confidence": 0.9})
+        fields.append({"name": "resolution", "value": "1080x1920", "status": "inferred", "source_quote": None, "confidence": 0.9})
 
     # Acceptance criteria / change boundary: clients almost never state these in a
     # casual WhatsApp brief, so recall is deliberately low -- a false "stated" is far
@@ -499,47 +507,91 @@ def _heuristic_extract_scope(brief: str) -> dict:
         fields.append({"name": "change_boundary", "value": None, "status": "missing",
                        "source_quote": None, "confidence": 0.5})
 
-    clarifications = [
-        {
-            "id": f"q_{uuid.uuid4().hex[:6]}",
-            "question": "What is the final duration for each video?",
-            "why": "Final duration determines raw cutting time and subtitle pacing.",
-            "impact": ["time", "cost"],
-            "priority": 1,
-            "affected_fields": ["final_duration"],
-            "answer": None,
-        },
-        {
-            "id": f"q_{uuid.uuid4().hex[:6]}",
-            "question": "Is raw footage pre-selected or does the editor need to review all takes?",
-            "why": "Sifting through unselected raw footage adds significant unpaid review hours.",
-            "impact": ["time", "cost"],
-            "priority": 2,
-            "affected_fields": ["footage_preselected", "footage_hours"],
-            "answer": None,
-        },
-        {
-            "id": f"q_{uuid.uuid4().hex[:6]}",
-            "question": "How many consolidated revision rounds are included?",
-            "why": "Unbounded revisions are the #1 cause of margin loss and project fatigue.",
-            "impact": ["revision"],
-            "priority": 3,
-            "affected_fields": ["revision_rounds"],
-            "answer": None,
-        },
-        {
-            "id": f"q_{uuid.uuid4().hex[:6]}",
-            "question": "How many stakeholders will provide feedback and approve deliverables?",
-            "why": "Multiple approvers with conflicting feedback increase revision cycle time.",
-            "impact": ["dependency", "revision"],
-            "priority": 4,
-            "affected_fields": ["approver_count"],
-            "answer": None,
-        }
-    ]
+    if is_video:
+        clarifications = [
+            {
+                "id": f"q_{uuid.uuid4().hex[:6]}",
+                "question": "What is the final duration for each video?",
+                "why": "Final duration determines raw cutting time and subtitle pacing.",
+                "impact": ["time", "cost"],
+                "priority": 1,
+                "affected_fields": ["final_duration"],
+                "answer": None,
+            },
+            {
+                "id": f"q_{uuid.uuid4().hex[:6]}",
+                "question": "Is raw footage pre-selected or does the editor need to review all takes?",
+                "why": "Sifting through unselected raw footage adds significant unpaid review hours.",
+                "impact": ["time", "cost"],
+                "priority": 2,
+                "affected_fields": ["footage_preselected", "footage_hours"],
+                "answer": None,
+            },
+            {
+                "id": f"q_{uuid.uuid4().hex[:6]}",
+                "question": "How many consolidated revision rounds are included?",
+                "why": "Unbounded revisions are the #1 cause of margin loss and project fatigue.",
+                "impact": ["revision"],
+                "priority": 3,
+                "affected_fields": ["revision_rounds"],
+                "answer": None,
+            },
+            {
+                "id": f"q_{uuid.uuid4().hex[:6]}",
+                "question": "How many stakeholders will provide feedback and approve deliverables?",
+                "why": "Multiple approvers with conflicting feedback increase revision cycle time.",
+                "impact": ["dependency", "revision"],
+                "priority": 4,
+                "affected_fields": ["approver_count"],
+                "answer": None,
+            },
+        ]
+    else:
+        # Non-video (e.g. website/software) profession: this template is not
+        # calibrated, so these stay pure critique-only questions -- ontology
+        # hints per master plan §8.4, never a step toward a fabricated
+        # hour/price estimate for a profession with no validated formula.
+        clarifications = [
+            {
+                "id": f"q_{uuid.uuid4().hex[:6]}",
+                "question": "What authentication method does this need (email/password, Google, phone OTP, none)?",
+                "why": "Auth method changes setup work and whether a third-party identity provider is required.",
+                "impact": ["time", "cost"],
+                "priority": 1,
+                "affected_fields": [],
+                "answer": None,
+            },
+            {
+                "id": f"q_{uuid.uuid4().hex[:6]}",
+                "question": "Does this need payment processing, and if so, which provider?",
+                "why": "Payment integration adds compliance, testing, and third-party account setup work.",
+                "impact": ["time", "cost", "dependency"],
+                "priority": 2,
+                "affected_fields": [],
+                "answer": None,
+            },
+            {
+                "id": f"q_{uuid.uuid4().hex[:6]}",
+                "question": "What user roles exist (e.g. admin, customer, staff) and what can each one do?",
+                "why": "Each role usually means a separate set of screens and access rules to build.",
+                "impact": ["time", "cost"],
+                "priority": 3,
+                "affected_fields": [],
+                "answer": None,
+            },
+            {
+                "id": f"q_{uuid.uuid4().hex[:6]}",
+                "question": "Where will this be deployed and hosted, and who provides that access?",
+                "why": "Deployment/hosting is a dependency that can block delivery even after the build is done.",
+                "impact": ["dependency", "timeline"],
+                "priority": 4,
+                "affected_fields": [],
+                "answer": None,
+            },
+        ]
 
     return {
-        "profession": "short_form_video",
+        "profession": classification["profession"],
         "fields": fields,
         "ambiguities": [],
         "clarifications": clarifications,

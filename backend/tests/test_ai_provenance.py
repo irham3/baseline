@@ -118,6 +118,28 @@ def test_heuristic_extracts_final_duration_minutes_as_seconds():
     assert f["value"] == 120.0
 
 
+def test_heuristic_never_fabricates_video_fields_for_non_video_brief():
+    """Trust lens (§16.6): a website/software brief must never get inferred
+    values for aspect_ratio, motion_level, platform, etc. -- those numbers
+    were never asked for and would be fabricated precision. Found live while
+    verifying the P1 profession-aware clarification questions."""
+    result = ai_service.extract_scope_heuristic(
+        "Bikin aplikasi kasir untuk toko retail, budget 8 juta, deadline 2 bulan")
+    names = {f["name"] for f in result["fields"]}
+    for video_only in ("aspect_ratio", "resolution", "motion_level", "subtitles",
+                       "scripting", "footage_preselected", "footage_hours", "platform",
+                       "footage_available"):
+        assert video_only not in names, f"{video_only} should not appear for a non-video brief"
+
+
+def test_heuristic_offers_software_clarification_questions_for_non_video_brief():
+    result = ai_service.extract_scope_heuristic(
+        "Bikin aplikasi kasir untuk toko retail, budget 8 juta, deadline 2 bulan")
+    questions = " ".join(c["question"] for c in result["clarifications"])
+    assert "authentication" in questions.lower() or "auth" in questions.lower()
+    assert "final duration for each video" not in questions.lower()
+
+
 def test_heuristic_extracts_acceptance_criteria_when_stated():
     result = ai_service.extract_scope_heuristic(
         "Butuh 5 video, dianggap selesai kalau sudah di-approve tim marketing")
