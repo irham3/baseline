@@ -4,7 +4,11 @@ motor==3.6.0
 pymongo==4.9.2
 pydantic==2.10.4
 python-dotenv==1.0.1
-emergentintegrations
+# emergentintegrations intentionally omitted: it isn't published on public PyPI
+# (`pip install` fails outside the Emergent platform), and ai_service.py already
+# handles its absence gracefully via ImportError -> deterministic heuristic
+# fallback. Live AI extraction stays unavailable on a public deploy unless this
+# is reinstated with a working package index.
 bcrypt==4.2.1
 PyJWT==2.10.1
 httpx==0.28.1
