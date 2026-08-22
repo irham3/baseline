@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 
 from fastapi import APIRouter, Request, HTTPException, Depends
 
@@ -136,6 +137,33 @@ async def analyze(body: AnalyzeBody, request: Request):
         doc["calibration_trace"] = None
     await db.brief_analyses.insert_one(doc)
     return clean(doc)
+
+
+@router.get("/analyses")
+async def list_analyses(
+    request: Request,
+    readiness_state: Optional[str] = None,
+    profession: Optional[str] = None,
+    limit: int = 50,
+):
+    """Rich analysis history (master plan P1): every past brief this owner
+    (guest or logged-in) analyzed, newest first, filterable by readiness_state
+    or profession. No cost/margin data -- price is already client-safe."""
+    owner_type, owner_id = await resolve_owner(request)
+    query = {"owner_id": owner_id}
+    if readiness_state:
+        query["readiness_state"] = readiness_state
+    if profession:
+        query["profession"] = profession
+    limit = max(1, min(limit, 100))
+    docs = await db.brief_analyses.find(query, {
+        "_id": 0, "analysis_id": 1, "brief": 1, "profession": 1, "support_level": 1,
+        "readiness_state": 1, "price": 1, "is_demo": 1, "created_at": 1, "updated_at": 1,
+    }, sort=[("created_at", -1)]).to_list(length=limit)
+    for d in docs:
+        d["brief_snippet"] = (d.get("brief") or "")[:120]
+        d.pop("brief", None)
+    return {"analyses": docs}
 
 
 async def _owned_analysis(analysis_id: str, request: Request) -> dict:
