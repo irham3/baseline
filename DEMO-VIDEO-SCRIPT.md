@@ -1,17 +1,10 @@
-# Draf Skrip Demo Video — Submission Kontes
+# Skrip Demo Video — Submission Kontes
 
-Target ~90 detik (sama seperti yang app-nya sendiri sudah janjikan: "90-Second Judge Mode Demo"). Dua opsi, beda tingkat risiko saat rekam:
-
-- **Opsi A (direkomendasikan)** — 100% lewat Judge Mode (`/judge`). Deterministik, tanpa AI live, tanpa ketik manual saat rekam — jadi hasilnya konsisten kalau harus rekam ulang beberapa kali.
-- **Opsi B** — buka dengan momen live di `/analyze` (banner merah "Not ready to quote" berubah jadi hijau "Now we can estimate it") karena itu **momen paling dramatis dan paling sesuai "magic moment" yang didefinisikan dokumen sendiri** (Lampiran H) — tapi butuh ketik/klik live saat rekam, risiko typo/lag lebih tinggi.
+**Diputuskan**: 100% lewat Judge Mode (`/judge`). Target ~90 detik, sama seperti yang app-nya sendiri sudah janjikan ("90-Second Judge Mode Demo"). Deterministik, tanpa AI live, tanpa ketik manual saat rekam — hasilnya konsisten kalau harus rekam ulang beberapa kali.
 
 Cek dulu §16.6 (voice principles) sebelum baca narasinya: hindari kata hype ("seamless", "revolutionize", "next-gen"), pakai kalimat pendek & konkret, jangan janji keuntungan pasti.
 
----
-
-## Opsi A — Judge Mode penuh (aman, direkomendasikan)
-
-Semua teks di bawah **diambil persis dari kode `Judge.js`**, bukan dikarang — supaya rekaman kamu match 1:1 sama yang muncul di layar.
+Semua teks di tabel di bawah **diambil persis dari kode `Judge.js`**, bukan dikarang — supaya rekaman kamu match 1:1 sama yang muncul di layar.
 
 | Waktu | Layar (klik `/judge`, langkah ke berapa) | Narasi (boleh diedit gaya bicaranya, tapi jaga kontennya) |
 |---|---|---|
@@ -26,26 +19,6 @@ Semua teks di bawah **diambil persis dari kode `Judge.js`**, bukan dikarang — 
 | 1:22-1:30 | **Langkah 8**: "How Baseline works" (penutup) | "Semua angka bisa dilacak balik ke asumsi yang kelihatan. Baseline before yes." |
 
 **Total**: ~90 detik kalau dituturkan santai tanpa jeda panjang antar klik.
-
----
-
-## Opsi B — buka dengan live `/analyze` (lebih dramatis, lebih berisiko)
-
-Ganti 0:00-0:20 di atas dengan urutan ini, sisanya (0:20 dst) boleh lanjut ke Judge Mode atau terus live:
-
-| Waktu | Layar | Narasi |
-|---|---|---|
-| 0:00-0:05 | Landing, klik "Analyze my brief" | "Ini brief WhatsApp asli dari klien." |
-| 0:05-0:12 | Paste brief video (mis. "12 reels, budget 3 juta, revisi sampai cocok, deadline minggu depan"), klik **Analyze Scope** | (diam, biarkan hasilnya yang bicara) |
-| 0:12-0:18 | Banner merah **"Not ready to quote"** + daftar issue muncul | "Kelihatan lengkap — tapi Baseline nemu 4 hal yang masih rawan sebelum kasih harga." |
-| 0:18-0:28 | Isi 2-3 field di "Answers & assumptions" (durasi, revisi, deadline), klik **Calculate estimate** | "Tinggal jawab beberapa hal ini—" |
-| 0:28-0:32 | Banner berubah jadi hijau **"Now we can estimate it"** | "—dan sekarang baru bisa dihitung." |
-
-**Risiko rekam**: kalau brief yang diketik live salah ketik/beda dari yang sudah pernah diverifikasi, hasil klasifikasi/issue bisa beda dari yang diharapkan. **Saran**: latihan dulu 2-3 kali offscreen pakai brief yang sama persis sebelum rekam final, atau pakai brief yang sudah pernah terverifikasi kerja:
-```
-Need 10 Reels for a campaign, footage ready, budget 6M, deadline 10 hari, revisi 2x, approver 1 orang.
-```
-(sudah dites berkali-kali sesi ini, hasilnya konsisten: 0 issue setelah field diisi, readiness berubah bersih)
 
 ---
 
