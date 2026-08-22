@@ -39,6 +39,61 @@ async def _owned_analysis(analysis_id: str, request: Request) -> dict:
     return doc
 
 
+async def _owned_agreements(owner_id: str, limit: int) -> list[dict]:
+    # owner_id is the only top-level filter -- snapshot.* fields are nested,
+    # so they're checked in Python below rather than as a Mongo query (the
+    # in-memory test store only matches flat top-level keys, no dot-paths).
+    docs = await db.scope_agreements.find(
+        {"owner_id": owner_id}, {"_id": 0, "snapshot": 1, "created_at": 1},
+        sort=[("created_at", -1)],
+    ).to_list(length=limit)
+    return docs
+
+
+@router.get("/clients")
+async def list_clients(request: Request):
+    """Reusable client profiles (master plan post-contest, safe subset): client
+    names this owner has already used on an Agreement Sheet, most recent
+    first, for quick-pick when creating the next one. No new collection --
+    derived straight from scope_agreements so it's always in sync."""
+    _, owner_id = await resolve_owner(request)
+    docs = await _owned_agreements(owner_id, 100)
+    seen, names = set(), []
+    for d in docs:
+        name = (d.get("snapshot") or {}).get("client_name")
+        if name and name not in seen:
+            seen.add(name)
+            names.append(name)
+        if len(names) >= 10:
+            break
+    return {"clients": names}
+
+
+@router.get("/rate-card")
+async def rate_card(request: Request):
+    """Rate card (master plan post-contest, safe subset): price-per-unit from
+    this owner's own real sent Agreement Sheets -- never external/scraped
+    market data, which the Trust lens explicitly forbids."""
+    _, owner_id = await resolve_owner(request)
+    docs = await _owned_agreements(owner_id, 50)
+    items = []
+    for d in docs:
+        s = d.get("snapshot") or {}
+        if s.get("is_demo"):
+            continue
+        price, qty = s.get("price"), s.get("quantity")
+        if price and qty:
+            items.append({
+                "project_title": s.get("project_title"),
+                "price": price, "quantity": qty,
+                "price_per_unit": round(price / qty),
+                "created_at": d.get("created_at"),
+            })
+        if len(items) >= 20:
+            break
+    return {"items": items}
+
+
 @router.post("/analysis/{analysis_id}/agreement")
 async def create_agreement(analysis_id: str, body: AgreementBody, request: Request):
     doc = await _owned_analysis(analysis_id, request)
