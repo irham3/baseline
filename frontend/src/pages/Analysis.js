@@ -92,6 +92,7 @@ export default function Analysis() {
   const [scopeCheckResult, setScopeCheckResult] = useState(null);
   const [scopeCheckError, setScopeCheckError] = useState(null);
   const [toast, setToast] = useState("");
+  const [changingProfession, setChangingProfession] = useState(false);
   const [dark, setDark] = useState(() => {
     try {
       return localStorage.getItem(THEME_KEY) !== "light";
@@ -152,6 +153,21 @@ export default function Analysis() {
       setRecalc(false);
     }
   }, [id, costProfile, overrides, applyCalibration, selected]);
+
+  const changeProfession = async (profession) => {
+    if (!analysis || profession === analysis.profession) return;
+    setChangingProfession(true);
+    try {
+      const { data } = await client.post(`/analysis/${id}/profession`, { profession });
+      setAnalysis((a) => ({ ...a, ...data }));
+      track("profession_overridden", { analysis_id: id, profession });
+    } catch (e) {
+      setToast(apiErrorMessage(e.response?.data?.detail) || "Could not update project type.");
+      setTimeout(() => setToast(""), 3000);
+    } finally {
+      setChangingProfession(false);
+    }
+  };
 
   const selectOption = (opt) => {
     setDeclineMode(false);
@@ -278,6 +294,25 @@ export default function Analysis() {
           )}
           {!analysis.is_demo && analysis.provenance === "heuristic_fallback" && (
             <Badge tone="neutral" data-testid="provenance-fallback">Deterministic fallback (no AI)</Badge>
+          )}
+        </div>
+
+        {/* Profession classification -- a keyword guess, not a trained classifier;
+            wrong for enough briefs that it needs to be user-correctable. */}
+        <div className="mt-2 flex flex-wrap items-center gap-2" data-testid="profession-selector">
+          <span className="text-[12px] font-medium text-ink-faint">Project type:</span>
+          <select
+            className="rounded-full border border-line/60 bg-raised px-2.5 py-1 text-[12px] font-medium text-ink-soft outline-none transition-colors focus:border-green"
+            value={analysis.profession || "general"}
+            onChange={(e) => changeProfession(e.target.value)}
+            disabled={changingProfession}
+            data-testid="profession-select"
+          >
+            <option value="short_form_video">Short-form video (calibrated pricing)</option>
+            <option value="general">Other / general (critique only)</option>
+          </select>
+          {analysis.profession_overridden && (
+            <span className="text-[11px] text-ink-faint">(corrected by you)</span>
           )}
         </div>
 

@@ -59,6 +59,10 @@ class DealCopyBody(BaseModel):
     options: list[dict] = Field(min_length=2, max_length=3)
 
 
+class ProfessionOverrideBody(BaseModel):
+    profession: str = Field(min_length=1, max_length=50)
+
+
 class ScopeCheckBody(BaseModel):
     new_request: str = Field(min_length=1, max_length=2000)
     delta: Optional[dict] = None

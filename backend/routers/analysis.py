@@ -11,7 +11,7 @@ import ai_service
 import rules
 import core
 from core import db, now_utc, iso, clean, resolve_user, resolve_owner
-from models import AnalyzeBody, CostProfileBody, EstimateBody, DealCopyBody, ScopeCheckBody
+from models import AnalyzeBody, CostProfileBody, EstimateBody, DealCopyBody, ScopeCheckBody, ProfessionOverrideBody
 from rate_limit import rate_limit
 
 router = APIRouter(prefix="/api")
@@ -158,6 +158,27 @@ async def delete_analysis(analysis_id: str, request: Request):
     await _owned_analysis(analysis_id, request)
     await db.brief_analyses.delete_one({"analysis_id": analysis_id})
     return {"ok": True}
+
+
+@router.post("/analysis/{analysis_id}/profession")
+async def override_profession(analysis_id: str, body: ProfessionOverrideBody, request: Request):
+    """Let the user correct classify_profession()'s keyword-heuristic guess --
+    it decides only whether calibrated pricing is offered, so a wrong guess
+    otherwise silently blocks (or wrongly unlocks) the estimate entirely."""
+    doc = await _owned_analysis(analysis_id, request)
+    if body.profession not in rules.KNOWN_PROFESSIONS:
+        raise HTTPException(status_code=422, detail="Unknown profession value.")
+    support_level = rules.support_level_for_profession(body.profession)
+    readiness_state = rules.compute_readiness_state(doc.get("deal_issues", []), support_level)
+    await db.brief_analyses.update_one(
+        {"analysis_id": analysis_id},
+        {"$set": {
+            "profession": body.profession, "support_level": support_level,
+            "readiness_state": readiness_state, "profession_overridden": True,
+            "updated_at": iso(now_utc()),
+        }},
+    )
+    return {"profession": body.profession, "support_level": support_level, "readiness_state": readiness_state}
 
 
 # -------- estimate --------

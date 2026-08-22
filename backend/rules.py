@@ -20,6 +20,12 @@ RULE_VERSION = "1.0.0"
 # estimate -- see classify_profession() below.
 SUPPORTED_PROFESSION = "short_form_video"
 
+# The only professions the user-facing override can pick between -- kept in
+# sync with the calibrated-estimation gate in compute_readiness_state().
+KNOWN_PROFESSIONS = ("short_form_video", "general")
+
+_SUPPORT_LEVEL_BY_PROFESSION = {"short_form_video": "calibrated_estimation"}
+
 _VIDEO_SIGNALS = ("reel", "reels", "video", "shorts", "tiktok", "edit", "footage", "konten", "cut")
 _NON_VIDEO_SIGNALS = (
     "website", "web app", "aplikasi", "toko online", "landing page", "software",
@@ -27,16 +33,20 @@ _NON_VIDEO_SIGNALS = (
 )
 
 
+def support_level_for_profession(profession: str) -> str:
+    return _SUPPORT_LEVEL_BY_PROFESSION.get(profession, "critique_only")
+
+
 def classify_profession(brief: str) -> dict:
     """Tentative, editable classification -- a keyword heuristic, not a trained
     classifier. Only decides whether the calibrated short-form-video estimator
-    is allowed to run; it never blocks the Generic Deal Rule Pack critique."""
+    is allowed to run; it never blocks the Generic Deal Rule Pack critique.
+    The user can correct a wrong guess via POST /analysis/{id}/profession."""
     text = brief.lower()
     has_video = any(sig in text for sig in _VIDEO_SIGNALS)
     has_non_video = any(sig in text for sig in _NON_VIDEO_SIGNALS)
-    if has_video and not has_non_video:
-        return {"profession": "short_form_video", "support_level": "calibrated_estimation"}
-    return {"profession": "general", "support_level": "critique_only"}
+    profession = "short_form_video" if (has_video and not has_non_video) else "general"
+    return {"profession": profession, "support_level": support_level_for_profession(profession)}
 
 
 def _field(fields: list[dict], name: str) -> dict | None:
