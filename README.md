@@ -6,6 +6,13 @@ small creative studios — built for **Building Indonesia 2026**.
 - **Live app:** https://baselinework.app
 - **90-second guided demo (no login):** https://baselinework.app/judge
 
+> **Deployment status**: the live URL above is real and up, but it currently serves an
+> older build. `origin/rifqi` (this repo's active branch) has since added everything
+> under "Additional capabilities" below and is not yet redeployed there — `GET
+> /api/analyses` (added this session) 404s on the live site as of this writing. Redeploy
+> from `origin/rifqi` before demoing or onboarding someone from the live URL alone. See
+> `DEPLOY.md`.
+
 ## The problem
 
 A short-form video editor gets a brief over WhatsApp: *"Butuh 12 Reels buat campaign
@@ -39,6 +46,36 @@ messy WhatsApp/client brief
   -> client-safe Agreement Sheet
   -> client response (approve / request changes / expire / revoke)
 ```
+
+## Additional capabilities
+
+Added in the most recent working session (not yet on the live URL — see the deployment
+status note above), covering the master plan's remaining P0/P1/post-contest scope:
+
+- **Full 9/9 Generic Deal Rule Pack** (`backend/rules.py`) — acceptance clarity and
+  change boundary were the last two of the plan's nine universal critique criteria;
+  both resolve through the same Clarification Gate flow as the other seven (dropdown
+  presets or auto-extraction from the brief), not just static warnings.
+- **Editable profession classification** — `classify_profession()`'s keyword guess
+  (e.g. a video brief that happens to mention "aplikasi" gets misclassified as
+  non-video) can be corrected via `POST /analysis/{id}/profession`; the UI shows a
+  "Project type" selector next to the provenance badge.
+- **Software/non-video clarification questions** — a brief classified outside
+  short-form video gets auth/payment/roles/deployment questions instead of
+  video-specific ones, and no longer gets fabricated video-only inferred fields
+  (aspect ratio, motion level, etc.) in its evidence map. Still critique-only; no
+  calibrated price estimator exists for other professions without validated data.
+- **Multi-project Personal Estimation Memory** — up to 5 saved projects with a median
+  correction factor and confidence level (was silently capped at 1 project before).
+- **Analysis history + filter** (`GET /api/analyses`) — browse and filter every past
+  analysis by readiness state or profession.
+- **Export proposal as PDF** — client-safe (price/scope/timeline only, no cost/margin)
+  print view via the browser's native print dialog, no new dependency.
+- **Shareable result image** — a downloadable PNG summary card (readiness state, issue
+  count, price floor) generated client-side with the Canvas API.
+- **Reusable client profiles + rate card** — both derived from the owner's own sent
+  Agreement Sheets (never external/scraped data): a client-name autocomplete when
+  creating a new agreement, and a price-per-video table on the Workspace page.
 
 ## Why AI extracts, but never prices
 
@@ -82,10 +119,32 @@ if MongoDB is unreachable — it fails fast instead of quietly losing data on re
 This app was originally scaffolded on Emergent and still uses two of its integrations,
 both optional and gracefully degraded when absent:
 - `emergentintegrations` for LLM scope extraction (falls back to the deterministic
-  heuristic extractor when the package or `EMERGENT_LLM_KEY` isn't available).
+  heuristic extractor when the package or `EMERGENT_LLM_KEY` isn't available). It's
+  **not on public PyPI**, so it's commented out of `backend/requirements.txt` — `pip
+  install` would otherwise fail on any host outside Emergent itself. Reinstate that
+  line only if you have a working index for it.
 - An Emergent-hosted Google OAuth session proxy, as one of three supported Google
   sign-in paths (alongside direct Google Identity Services ID tokens and OAuth access
-  tokens).
+  tokens). This proxy path is Emergent-specific and likely won't work when the app is
+  deployed elsewhere; the direct Google Identity Services path doesn't depend on it.
+
+## Documentation map
+
+This repo carries more `.md` files than usual for a contest submission — here's what
+each is for, so a fresh clone doesn't need to guess:
+
+| File | For | Contents |
+|---|---|---|
+| `README.md` | Anyone (start here) | This file. |
+| `PRODUCT.md` | Anyone | Product spec: users, purpose, scope boundaries. |
+| `DESIGN.md` | Anyone | Visual direction, brand assets, UI decisions. |
+| `DEPLOY.md` | Whoever deploys next | Step-by-step: MongoDB Atlas + Render + Vercel, all free tier. Draft only — not yet executed (see the deployment status note at the top of this file). |
+| `DEMO-VIDEO-SCRIPT.md` | Whoever records the submission video | Shot-by-shot script matching the actual Judge Mode UI text. |
+| `auth_testing.md` | Anyone testing login | The two auth methods (Google OAuth, JWT email/password) and how to exercise each. |
+| `CLAUDE.md` | Claude Code sessions only | Working notes/instructions for an AI assistant picking this project back up — not written for humans, safe to ignore. |
+| `RENCANA-acceptance-change-boundary.md`, `PENUGASAN-AI.md`, `PENUGASAN-AI-P1.md` | Historical record | Planning docs from the session that closed the master plan's remaining P0/P1/post-contest gaps (see "Additional capabilities" above). Useful for *why* a decision was made; not needed to run or extend the app. |
+| `render.yaml` | Whoever deploys | Render Blueprint referenced by `DEPLOY.md`. |
+| `pilot-notes/` (gitignored, not in this clone) | Rifqi only | Real pilot testers' names/contacts/feedback for the contest's evidence requirement — deliberately never committed; ask Rifqi directly if you need pilot status. |
 
 ## Deterministic formula principles
 
@@ -127,8 +186,7 @@ Prerequisites: Python 3.11+, Node 18+, npm.
 cd backend
 python -m venv .venv
 .venv/Scripts/activate        # .venv/bin/activate on macOS/Linux
-pip install -r requirements.txt   # emergentintegrations is optional/private; the app
-                                   # runs fine without it (heuristic fallback only)
+pip install -r requirements.txt
 # create backend/.env, see the table below
 uvicorn server:app --reload --port 8001
 
@@ -188,9 +246,16 @@ tags and landing page.
 - A full Indonesian-language pass across the entire UI has not been done; some
   system-level copy (e.g. generic error fallbacks) is Indonesian while most product
   UI is English. See `DESIGN.md` for the current language policy.
+- Screenshot OCR (master plan P1) is deliberately deferred, not built: it would need
+  a sizeable new client-side dependency for uncertain accuracy gain, and ranked lowest
+  among the remaining P1 items when the rest were done.
+- The contest's pilot-evidence requirement (real freelancers approached, real quotes
+  attempted, consent recorded) has recruitment/consent drafts ready in `pilot-notes/`
+  (gitignored — ask Rifqi) but no completed pilots recorded yet as of this writing.
 
 ## Roadmap
 
+- Redeploy `origin/rifqi` to the live URL — see the deployment status note at the top.
 - Automated browser E2E test for the Judge Mode happy path.
 - Full bilingual (ID/EN) UI toggle for client-facing copy and the Agreement Sheet.
 - Broader Pydantic-typed scope-override validation (currently validated at the
