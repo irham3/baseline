@@ -37,7 +37,7 @@ Saat ini yang serve port 3000 adalah `serve -s build` (bundle production, filena
 
 ```bash
 cd backend
-.venv/Scripts/python.exe -m pytest tests/ -q --ignore=tests/backend_test.py   # unit (112 test, per 2026-08-22)
+.venv/Scripts/python.exe -m pytest tests/ -q --ignore=tests/backend_test.py   # unit (114 test, per 2026-08-22)
 REACT_APP_BACKEND_URL=http://127.0.0.1:8001 .venv/Scripts/python.exe -m pytest tests/backend_test.py -q  # E2E live (17 test), backend harus jalan dulu
 
 cd frontend
@@ -51,11 +51,12 @@ CI=true npm run build   # harus "Compiled successfully" — ini JUGA deploy step
 
 ## Status Pengerjaan
 
-Semua di bawah ini **sudah di-push ke `origin/rifqi`**, sudah lolos 112 unit test, dan sudah diverifikasi manual langsung di Chrome (bukan cuma lolos test — didogfooding sungguhan, klik-klik tiap tombol).
+Semua di bawah ini **sudah di-push ke `origin/rifqi`**, sudah lolos 114 unit test, dan sudah diverifikasi manual langsung di Chrome (bukan cuma lolos test — didogfooding sungguhan, klik-klik tiap tombol).
 
 ### Fitur/perbaikan besar (kronologis)
 
-0. **Generic Deal Rule Pack lengkap — 9/9 kriteria §4.3 master plan** (22 Aug 2026, commit `a7937666` + `4a755053`) — 2 kriteria yang tadinya hilang (**acceptance clarity**, **change boundary**) sekarang diimplementasi penuh, termasuk jalur resolve-nya (bukan cuma card kritik yang muncul selamanya): freelancer bisa deklarasi lewat 2 dropdown preset baru di Clarification Gate ("Terms you define"), atau otomatis ter-ekstrak dari brief kalau klien kebetulan menyebutkannya. Severity `medium` (tidak menggerbang readiness). Nilai bertahan setelah reload (`deal_terms` di dokumen analisis — bug data-loss D10 ditemukan & diperbaiki saat desain, sebelum sempat ke produksi). Tampil juga di Agreement Sheet publik. Detail lengkap: `RENCANA-acceptance-change-boundary.md` (5 fase, semua sudah dieksekusi) dan `PENUGASAN-AI.md`.
+0a. **Generic Deal Rule Pack lengkap — 9/9 kriteria §4.3 master plan** (22 Aug 2026, commit `a7937666` + `4a755053`) — 2 kriteria yang tadinya hilang (**acceptance clarity**, **change boundary**) sekarang diimplementasi penuh, termasuk jalur resolve-nya (bukan cuma card kritik yang muncul selamanya): freelancer bisa deklarasi lewat 2 dropdown preset baru di Clarification Gate ("Terms you define"), atau otomatis ter-ekstrak dari brief kalau klien kebetulan menyebutkannya. Severity `medium` (tidak menggerbang readiness). Nilai bertahan setelah reload (`deal_terms` di dokumen analisis — bug data-loss D10 ditemukan & diperbaiki saat desain, sebelum sempat ke produksi). Tampil juga di Agreement Sheet publik. Detail lengkap: `RENCANA-acceptance-change-boundary.md` (5 fase, semua sudah dieksekusi) dan `PENUGASAN-AI.md`.
+0b. **Fix bug parsing budget tanpa spasi** (22 Aug 2026, commit `6cdf9c2a`) — `_currency_to_idr()` di `ai_service.py` gagal parse `"5jt"` (angka+satuan nempel tanpa spasi, pola kasual Indonesia yang umum) karena syaratnya `" jt"` pakai spasi di depan; hasilnya diam-diam jadi `5` bukan `5.000.000`. **Dampak nyata, bukan cuma salah tampilan**: budget yang salah bikin engine estimasi keliru bilang "budget di bawah break-even" dan mematikan Option A (`no_viable_scope`) padahal budgetnya sebenarnya cukup. Ketemu tidak sengaja saat verifikasi browser fitur di atas. Fix: syaratkan digit langsung sebelum satuan (bukan wajib spasi) — tetap aman dari false-positive "rb" di tengah kata seperti "terbaik".
 
 1. **Integritas pricing & keamanan Agreement Sheet** — durasi video memengaruhi jam kerja, timeline dihitung (bukan hardcode 7/10/21 hari), Option A tidak lagi memalsukan "sesuai budget" kalau memang tidak layak (jadi `no_viable_scope` yang jujur), buffer scale-aware (persen dari labor cost, bukan angka tetap), Agreement Sheet tidak bisa ditampering dari browser (server resolve `option_id` sendiri, harga/qty tidak pernah dipercaya dari client).
 2. **Judge Mode nyata** (`/judge`) — 8 step deterministik tanpa login, teruji end-to-end termasuk create+approve Agreement Sheet ke backend live. Plus `/analyze` (route yang sebelumnya broken link dari Workspace/Analysis).
@@ -81,7 +82,6 @@ Landing, Judge Mode (8 step penuh), Analyze dengan brief custom Bahasa Indonesia
 
 - **`memory/test_credentials.md` di branch `master`** — masih ada password test dummy plaintext (`raka@baseline.app` / `baseline123`), sudah ada dari commit awal sebelum Claude ikut kerja. **Sengaja ditunda** atas permintaan user ("ini nanti dulu aja", 2026-08-21) — belum disentuh karena itu di `master`, bukan `rifqi`.
 - **PR #1 belum di-review owner** — tidak ada aksi yang perlu diambil Claude, tinggal tunggu.
-- **BUG DITEMUKAN, BELUM DIPERBAIKI (22 Aug 2026, di luar scope kerjaan hari itu, sengaja tidak disentuh)**: `_currency_to_idr()` di `backend/ai_service.py` salah parse budget kalau angka dan satuan nempel tanpa spasi, mis. **`"5jt"`** (bukan `"5 jt"`) → hasilnya `5` bukan `5.000.000`. Root cause: pengecekan `"juta" in text` dan `" jt" in text` (pakai spasi di depan `jt`) sama-sama gagal untuk string `"5jt"`, jatuh ke fallback `nums[0]`. **Dampak nyata**: budget yang salah parse bikin engine estimasi salah hitung "Budget below break-even" dan Option A jadi `no_viable_scope` padahal budgetnya sebenarnya cukup — bukan cuma salah tampilan angka. Ketemu tidak sengaja saat verifikasi browser Fase 4 (brief test "budget 5jt"). Fix-nya kemungkinan kecil (tambah cek tanpa syarat spasi), tapi belum diverifikasi dampaknya ke test lain — perlu sesi terpisah.
 
 ### Catatan teknis penting
 
