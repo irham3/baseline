@@ -37,7 +37,7 @@ Saat ini yang serve port 3000 adalah `serve -s build` (bundle production, filena
 
 ```bash
 cd backend
-.venv/Scripts/python.exe -m pytest tests/ -q --ignore=tests/backend_test.py   # unit (119 test, per 2026-08-22)
+.venv/Scripts/python.exe -m pytest tests/ -q --ignore=tests/backend_test.py   # unit (127 test, per 2026-08-22)
 REACT_APP_BACKEND_URL=http://127.0.0.1:8001 .venv/Scripts/python.exe -m pytest tests/backend_test.py -q  # E2E live (17 test), backend harus jalan dulu
 
 cd frontend
@@ -51,7 +51,19 @@ CI=true npm run build   # harus "Compiled successfully" — ini JUGA deploy step
 
 ## Status Pengerjaan
 
-Semua di bawah ini **sudah di-push ke `origin/rifqi`**, sudah lolos 119 unit test, dan sudah diverifikasi manual langsung di Chrome (bukan cuma lolos test — didogfooding sungguhan, klik-klik tiap tombol).
+Semua di bawah ini **sudah di-push ke `origin/rifqi`**, sudah lolos 127 unit test, dan sudah diverifikasi manual langsung di Chrome (bukan cuma lolos test — didogfooding sungguhan, klik-klik tiap tombol).
+
+### §17.3 (P1) + subset aman §17.4 (Post-contest) — 22 Aug 2026, commit `99c16afd`..`eb794cab`
+
+Rifqi minta lanjut kerjakan bagian yang tadinya sengaja dilewati. Setelah ditimbang ulang per item (lihat `PENUGASAN-AI-P1.md`), yang dikerjakan:
+- **Multi-project Personal Estimation Memory** — backend sudah siap (5 project, median), FE `Workspace.js` yang tadinya cuma bisa 1 project (endpoint lama `/calibration` hapus semua project lain tiap save) sekarang pakai `/projects` list-based penuh, dengan bar projected-vs-realized per project.
+- **Rich analysis history + filter** — endpoint baru `GET /api/analyses`, tidak pernah ada sebelumnya.
+- **Export proposal PDF** — `window.print()` + CSS isolation, nol dependency baru.
+- **Klarifikasi khusus profesi non-video** (auth method, payment, roles, deployment) — tetap critique-only, tidak ada calibrated estimator palsu untuk profesi lain.
+- **Client profile reusable + rate card** — dari `scope_agreements` milik user sendiri, bukan data eksternal/scrape (jaga Trust lens §16.6).
+- **Bug ditemukan & diperbaiki saat verifikasi**: heuristik ekstraksi dulu selalu menyisipkan field video palsu (aspect ratio, platform, dst) bahkan untuk brief non-video — sekarang digerbang oleh klasifikasi profesi.
+
+**Sengaja TIDAK dikerjakan** (alasan lengkap di `PENUGASAN-AI-P1.md`): payment gateway/escrow/full contract generator/negotiation bot (risiko finansial/legal), CRM penuh/Kanban/full revision management (beda kategori produk), WhatsApp automation resmi/voice transcription/generic PDF parser (butuh infrastruktur eksternal), calibrated estimator profesi lain/arbitrary risk score/market-rate scraper (melanggar Trust lens sendiri), email integration/team workspace/invoice-payment/API agency (infrastruktur eksternal atau redesign multi-tenant besar). Screenshot OCR (P1) di-defer, bukan ditolak — dependency berat, prioritas rendah.
 
 ### Audit master plan P0/P0.5 (22 Aug 2026) — semua item yang direncanakan dokumen "sekarang" sudah tuntas
 
